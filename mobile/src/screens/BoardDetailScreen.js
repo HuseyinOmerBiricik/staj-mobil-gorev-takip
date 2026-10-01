@@ -1,7 +1,4 @@
-import {
-  useCallback,
-  useState,
-} from "react";
+import { useCallback, useState } from "react";
 
 import {
   View,
@@ -18,6 +15,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 
 import useListStore from "../store/listStore";
+import useTaskStore from "../store/taskStore";
 
 export default function BoardDetailScreen({
   route,
@@ -25,46 +23,129 @@ export default function BoardDetailScreen({
 }) {
   const { board } = route.params;
 
+  // Kolon store
   const lists = useListStore((state) => state.lists);
-  const isLoading = useListStore((state) => state.isLoading);
-  const fetchLists = useListStore((state) => state.fetchLists);
-  const createList = useListStore((state) => state.createList);
-  const updateList = useListStore((state) => state.updateList);
-  const deleteList = useListStore((state) => state.deleteList);
-  const clearLists = useListStore((state) => state.clearLists);
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingList, setEditingList] = useState(null);
+  const isLoading = useListStore(
+    (state) => state.isLoading
+  );
+
+  const fetchLists = useListStore(
+    (state) => state.fetchLists
+  );
+
+  const createList = useListStore(
+    (state) => state.createList
+  );
+
+  const updateList = useListStore(
+    (state) => state.updateList
+  );
+
+  const deleteList = useListStore(
+    (state) => state.deleteList
+  );
+
+  const clearLists = useListStore(
+    (state) => state.clearLists
+  );
+
+  // Görev store
+  const tasksByList = useTaskStore(
+    (state) => state.tasksByList
+  );
+
+  const fetchTasks = useTaskStore(
+    (state) => state.fetchTasks
+  );
+
+  const clearTasks = useTaskStore(
+    (state) => state.clearTasks
+  );
+
+  // Kolon modal state
+  const [modalVisible, setModalVisible] =
+    useState(false);
+
+  const [editingList, setEditingList] =
+    useState(null);
+
   const [title, setTitle] = useState("");
+
   const [saving, setSaving] = useState(false);
 
+  // Pano açıldığında kolonları ve görevleri getir
   useFocusEffect(
     useCallback(() => {
-      fetchLists(board.id);
+      const loadBoard = async () => {
+        try {
+          const boardLists = await fetchLists(
+            board.id
+          );
+
+          await Promise.all(
+            boardLists.map((list) =>
+              fetchTasks(list.id)
+            )
+          );
+        } catch (error) {
+          Alert.alert(
+            "Hata",
+            "Pano bilgileri yüklenemedi."
+          );
+        }
+      };
+
+      loadBoard();
 
       return () => {
         clearLists();
+        clearTasks();
       };
-    }, [board.id, fetchLists, clearLists])
+    }, [
+      board.id,
+      fetchLists,
+      fetchTasks,
+      clearLists,
+      clearTasks,
+    ])
   );
 
+  // Yeni kolon modalını aç
   const openCreateModal = () => {
     setEditingList(null);
     setTitle("");
     setModalVisible(true);
   };
 
+  // Kolon düzenleme modalını aç
   const openEditModal = (list) => {
     setEditingList(list);
     setTitle(list.title);
     setModalVisible(true);
   };
 
+  // Modalı kapat
+  const closeModal = () => {
+    if (saving) {
+      return;
+    }
+
+    setModalVisible(false);
+    setEditingList(null);
+    setTitle("");
+  };
+
+  // Kolon oluştur / güncelle
   const handleSave = async () => {
     const cleanTitle = title.trim();
 
     if (!cleanTitle) {
-      Alert.alert("Hata", "Kolon başlığı zorunludur.");
+      Alert.alert(
+        "Hata",
+        "Kolon başlığı zorunludur."
+      );
+
       return;
     }
 
@@ -85,12 +166,15 @@ export default function BoardDetailScreen({
           title: cleanTitle,
         });
       } else {
-        await createList(board.id, cleanTitle);
+        await createList(
+          board.id,
+          cleanTitle
+        );
       }
 
       setModalVisible(false);
-      setTitle("");
       setEditingList(null);
+      setTitle("");
     } catch (error) {
       Alert.alert(
         "Hata",
@@ -102,6 +186,7 @@ export default function BoardDetailScreen({
     }
   };
 
+  // Kolon sil
   const handleDelete = (list) => {
     Alert.alert(
       "Kolonu Sil",
@@ -114,6 +199,7 @@ export default function BoardDetailScreen({
         {
           text: "Sil",
           style: "destructive",
+
           onPress: async () => {
             try {
               await deleteList(list.id);
@@ -130,11 +216,29 @@ export default function BoardDetailScreen({
     );
   };
 
+  // Öncelik metni
+  const getPriorityLabel = (priority) => {
+    if (priority === "low") {
+      return "Düşük";
+    }
+
+    if (priority === "high") {
+      return "Yüksek";
+    }
+
+    return "Orta";
+  };
+
   return (
     <View style={styles.container}>
+      {/* Pano üst alanı */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>‹ Geri</Text>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.back}>
+            ‹ Geri
+          </Text>
         </TouchableOpacity>
 
         <Text style={styles.boardTitle}>
@@ -142,7 +246,9 @@ export default function BoardDetailScreen({
         </Text>
 
         {board.description ? (
-          <Text style={styles.boardDescription}>
+          <Text
+            style={styles.boardDescription}
+          >
             {board.description}
           </Text>
         ) : null}
@@ -157,12 +263,14 @@ export default function BoardDetailScreen({
         </TouchableOpacity>
       </View>
 
+      {/* Loading */}
       {isLoading && lists.length === 0 ? (
         <ActivityIndicator
           size="large"
           style={styles.loading}
         />
       ) : lists.length === 0 ? (
+        // Boş pano
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>
             Henüz kolon bulunmuyor.
@@ -173,51 +281,172 @@ export default function BoardDetailScreen({
           </Text>
         </View>
       ) : (
+        // Kanban kolonları
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.board}
         >
-          {lists.map((list) => (
-            <View
-              key={list.id}
-              style={styles.column}
-            >
-              <View style={styles.columnHeader}>
-                <Text style={styles.columnTitle}>
-                  {list.title}
-                </Text>
+          {lists.map((list) => {
+            const listTasks =
+              tasksByList[list.id] || [];
 
-                <View style={styles.columnActions}>
-                  <TouchableOpacity
-                    onPress={() => openEditModal(list)}
+            return (
+              <View
+                key={list.id}
+                style={styles.column}
+              >
+                {/* Kolon başlığı */}
+                <View
+                  style={styles.columnHeader}
+                >
+                  <Text
+                    style={styles.columnTitle}
                   >
-                    <Text style={styles.edit}>Düzenle</Text>
-                  </TouchableOpacity>
+                    {list.title}
+                  </Text>
 
-                  <TouchableOpacity
-                    onPress={() => handleDelete(list)}
+                  <View
+                    style={styles.columnActions}
                   >
-                    <Text style={styles.delete}>Sil</Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        openEditModal(list)
+                      }
+                    >
+                      <Text
+                        style={styles.edit}
+                      >
+                        Düzenle
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() =>
+                        handleDelete(list)
+                      }
+                    >
+                      <Text
+                        style={styles.delete}
+                      >
+                        Sil
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Görevler */}
+                <View style={styles.taskArea}>
+                  {listTasks.map((task) => (
+                    <TouchableOpacity
+                      key={task.id}
+                      style={styles.taskCard}
+                      onPress={() =>
+                        navigation.navigate(
+                          "TaskDetail",
+                          {
+                            task,
+                            listId: list.id,
+                          }
+                        )
+                      }
+                    >
+                      <Text
+                        style={styles.taskTitle}
+                      >
+                        {task.title}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.taskPriority
+                        }
+                      >
+                        Öncelik:{" "}
+                        {getPriorityLabel(
+                          task.priority
+                        )}
+                      </Text>
+
+                      {task.dueDate ? (
+                        <Text
+                          style={
+                            styles.taskDate
+                          }
+                        >
+                          Son tarih:{" "}
+                          {new Date(
+                            task.dueDate
+                          ).toLocaleDateString(
+                            "tr-TR"
+                          )}
+                        </Text>
+                      ) : null}
+
+                      {task.assignee ? (
+                        <Text
+                          style={
+                            styles.taskAssignee
+                          }
+                        >
+                          Atanan:{" "}
+                          {task.assignee.name}
+                        </Text>
+                      ) : (
+                        <Text
+                          style={
+                            styles.taskAssignee
+                          }
+                        >
+                          Atanmamış
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+
+                  {listTasks.length === 0 ? (
+                    <Text
+                      style={styles.noTask}
+                    >
+                      Henüz görev yok.
+                    </Text>
+                  ) : null}
+
+                  {/* Görev ekle */}
+                  <TouchableOpacity
+                    style={
+                      styles.addTaskButton
+                    }
+                    onPress={() =>
+                      navigation.navigate(
+                        "TaskForm",
+                        {
+                          listId: list.id,
+                        }
+                      )
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.addTaskText
+                      }
+                    >
+                      + Görev Ekle
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
-
-              <View style={styles.taskArea}>
-                <Text style={styles.noTask}>
-                  Henüz görev yok.
-                </Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
 
+      {/* Kolon oluştur / düzenle modal */}
       <Modal
         visible={modalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={closeModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modal}>
@@ -234,12 +463,19 @@ export default function BoardDetailScreen({
               onChangeText={setTitle}
               maxLength={50}
               autoFocus
+              editable={!saving}
             />
 
-            <View style={styles.modalActions}>
+            <Text style={styles.counter}>
+              {title.length}/50
+            </Text>
+
+            <View
+              style={styles.modalActions}
+            >
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setModalVisible(false)}
+                onPress={closeModal}
                 disabled={saving}
               >
                 <Text>İptal</Text>
@@ -251,9 +487,13 @@ export default function BoardDetailScreen({
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator color="#ffffff" />
+                  <ActivityIndicator
+                    color="#ffffff"
+                  />
                 ) : (
-                  <Text style={styles.saveText}>
+                  <Text
+                    style={styles.saveText}
+                  >
                     Kaydet
                   </Text>
                 )}
@@ -314,15 +554,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 30,
   },
 
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600",
+    textAlign: "center",
   },
 
   emptyText: {
     marginTop: 6,
+    textAlign: "center",
   },
 
   board: {
@@ -368,6 +611,50 @@ const styles = StyleSheet.create({
 
   noTask: {
     fontSize: 13,
+    marginBottom: 10,
+  },
+
+  taskCard: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+
+  taskTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+
+  taskPriority: {
+    fontSize: 12,
+    marginTop: 8,
+  },
+
+  taskDate: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  taskAssignee: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  addTaskButton: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: "#9ca3af",
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+
+  addTaskText: {
+    fontWeight: "600",
   },
 
   modalOverlay: {
@@ -394,6 +681,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 14,
+  },
+
+  counter: {
+    textAlign: "right",
+    fontSize: 12,
+    marginTop: 5,
   },
 
   modalActions: {

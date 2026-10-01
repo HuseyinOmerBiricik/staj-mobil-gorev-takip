@@ -6,20 +6,22 @@ const useListStore = create((set, get) => ({
   isLoading: false,
 
   fetchLists: async (boardId) => {
-    try {
-      set({ isLoading: true });
+  try {
+    set({ isLoading: true });
 
-      const response = await api.get(
-        `/boards/${boardId}/lists`
-      );
+    const response = await api.get(
+      `/boards/${boardId}/lists`
+    );
 
-      set({
-        lists: response.data,
-      });
-    } finally {
-      set({ isLoading: false });
-    }
-  },
+    set({
+      lists: response.data,
+    });
+
+    return response.data;
+  } finally {
+    set({ isLoading: false });
+  }
+},
 
   createList: async (boardId, title) => {
     const response = await api.post(
