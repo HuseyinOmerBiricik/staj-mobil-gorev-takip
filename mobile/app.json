@@ -1,7 +1,7 @@
-{
+﻿{
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Görev ve Proje Takip",
+    "slug": "gorev-proje-takip",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -20,11 +20,10 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
       [
         "expo-splash-screen",
         {
@@ -33,10 +32,6 @@
           "imageWidth": 76
         }
       ]
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+    ]
   }
 }
