@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import BoardListScreen from "../screens/BoardListScreen";
 import BoardFormScreen from "../screens/BoardFormScreen";
+import BoardDetailScreen from "../screens/BoardDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -20,6 +21,11 @@ export default function AppNavigator() {
       <Stack.Screen
         name="BoardForm"
         component={BoardFormScreen}
+      />
+
+      <Stack.Screen
+        name="BoardDetail"
+        component={BoardDetailScreen}
       />
     </Stack.Navigator>
   );

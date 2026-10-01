@@ -68,21 +68,15 @@ export default function BoardListScreen({ navigation }) {
       ) : null}
 
       <View style={styles.actions}>
-        <TouchableOpacity
-          onPress={() =>
-            navigation.navigate("BoardForm", {
-              board: item,
-            })
-          }
-        >
-          <Text style={styles.edit}>Düzenle</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => handleDelete(item)}
-        >
-          <Text style={styles.delete}>Sil</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+        onPress={() =>
+          navigation.navigate("BoardDetail", {
+            board: item,
+          })
+        }
+      >
+        <Text style={styles.open}>Aç</Text>
+      </TouchableOpacity>
       </View>
     </View>
   );
