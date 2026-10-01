@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   View,
   Text,
@@ -7,9 +8,80 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 
+import api from "../services/api";
+
 export default function RegisterScreen({ navigation }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async () => {
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanName || !cleanEmail || !password) {
+      Alert.alert(
+        "Hata",
+        "Ad soyad, e-posta ve şifre alanları zorunludur."
+      );
+      return;
+    }
+
+    if (cleanName.length < 2 || cleanName.length > 100) {
+      Alert.alert(
+        "Hata",
+        "Ad soyad 2-100 karakter arasında olmalıdır."
+      );
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(cleanEmail)) {
+      Alert.alert("Hata", "Geçerli bir e-posta adresi giriniz.");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert("Hata", "Şifre en az 6 karakter olmalıdır.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await api.post("/auth/register", {
+        name: cleanName,
+        email: cleanEmail,
+        password,
+      });
+
+      Alert.alert(
+        "Başarılı",
+        "Kullanıcı hesabı oluşturuldu.",
+        [
+          {
+            text: "Tamam",
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        "Sunucuya bağlanırken bir hata oluştu.";
+
+      Alert.alert("Kayıt başarısız", message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -31,6 +103,9 @@ export default function RegisterScreen({ navigation }) {
           style={styles.input}
           placeholder="Ad Soyad"
           autoCapitalize="words"
+          value={name}
+          onChangeText={setName}
+          editable={!loading}
         />
 
         <Text style={styles.label}>E-posta</Text>
@@ -40,6 +115,9 @@ export default function RegisterScreen({ navigation }) {
           placeholder="ornek@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+          editable={!loading}
         />
 
         <Text style={styles.label}>Şifre</Text>
@@ -48,16 +126,32 @@ export default function RegisterScreen({ navigation }) {
           style={styles.input}
           placeholder="En az 6 karakter"
           secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          editable={!loading}
         />
 
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>Kayıt Ol</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleRegister}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text style={styles.buttonText}>Kayıt Ol</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.loginContainer}>
-          <Text style={styles.loginText}>Zaten hesabınız var mı?</Text>
+          <Text style={styles.loginText}>
+            Zaten hesabınız var mı?
+          </Text>
 
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            disabled={loading}
+          >
             <Text style={styles.loginLink}> Giriş Yap</Text>
           </TouchableOpacity>
         </View>
