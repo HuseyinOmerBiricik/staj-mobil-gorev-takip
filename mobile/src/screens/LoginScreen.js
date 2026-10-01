@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-import * as SecureStore from "expo-secure-store";
+import useAuthStore from "../store/authStore";
 import api from "../services/api";
 
 export default function LoginScreen({ navigation }) {
@@ -42,14 +42,8 @@ export default function LoginScreen({ navigation }) {
     try {
       setLoading(true);
 
-      const response = await api.post("/auth/login", {
-        email: cleanEmail,
-        password,
-      });
-
-      await SecureStore.setItemAsync("token", response.data.token);
-
-      Alert.alert("Başarılı", "Giriş başarılı.");
+      await login(cleanEmail, password);
+      
     } catch (error) {
       const message =
         error.response?.data?.message ||
