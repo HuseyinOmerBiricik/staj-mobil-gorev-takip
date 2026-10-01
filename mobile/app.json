@@ -3,6 +3,7 @@
     "name": "Görev ve Proje Takip",
     "slug": "gorev-proje-takip",
     "version": "1.0.0",
+    "type": "module",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",

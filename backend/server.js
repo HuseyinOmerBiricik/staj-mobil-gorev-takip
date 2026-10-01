@@ -1,4 +1,7 @@
-const express = require("express");
+import "dotenv/config";
+import express from "express";
+
+import authRoutes from "./src/routes/authRoutes.js";
 
 const app = express();
 const PORT = 3000;
@@ -10,6 +13,8 @@ app.get("/", (req, res) => {
     message: "Staj Mobil Proje API çalışıyor.",
   });
 });
+
+app.use("/api/auth", authRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server http://localhost:${PORT} adresinde çalışıyor.`);
