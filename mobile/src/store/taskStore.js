@@ -1,4 +1,5 @@
 import { create } from "zustand";
+
 import api from "../services/api";
 
 const useTaskStore = create((set, get) => ({
@@ -38,7 +39,11 @@ const useTaskStore = create((set, get) => ({
     return response.data;
   },
 
-  updateTask: async (taskId, listId, data) => {
+  updateTask: async (
+    taskId,
+    listId,
+    data
+  ) => {
     const response = await api.put(
       `/tasks/${taskId}`,
       data
@@ -61,8 +66,13 @@ const useTaskStore = create((set, get) => ({
     return response.data;
   },
 
-  deleteTask: async (taskId, listId) => {
-    await api.delete(`/tasks/${taskId}`);
+  deleteTask: async (
+    taskId,
+    listId
+  ) => {
+    await api.delete(
+      `/tasks/${taskId}`
+    );
 
     const current =
       get().tasksByList[listId] || [];
@@ -73,6 +83,58 @@ const useTaskStore = create((set, get) => ({
         [listId]: current.filter(
           (task) => task.id !== taskId
         ),
+      },
+    });
+  },
+
+  moveTask: async (
+    taskId,
+    sourceListId,
+    targetListId,
+    order
+  ) => {
+    await api.patch(
+      `/tasks/${taskId}/move`,
+      {
+        listId: targetListId,
+        order,
+      }
+    );
+
+    if (sourceListId === targetListId) {
+      const response = await api.get(
+        `/lists/${sourceListId}/tasks`
+      );
+
+      set({
+        tasksByList: {
+          ...get().tasksByList,
+          [sourceListId]: response.data,
+        },
+      });
+
+      return;
+    }
+
+    const [
+      sourceResponse,
+      targetResponse,
+    ] = await Promise.all([
+      api.get(
+        `/lists/${sourceListId}/tasks`
+      ),
+      api.get(
+        `/lists/${targetListId}/tasks`
+      ),
+    ]);
+
+    set({
+      tasksByList: {
+        ...get().tasksByList,
+        [sourceListId]:
+          sourceResponse.data,
+        [targetListId]:
+          targetResponse.data,
       },
     });
   },

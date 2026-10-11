@@ -1,38 +1,50 @@
 import { useState } from "react";
+
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Alert,
   ActivityIndicator,
 } from "react-native";
 
 import api from "../services/api";
+import { useAppTheme } from "../theme/theme";
 
-export default function RegisterScreen({ navigation }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+export default function RegisterScreen({
+  navigation,
+}) {
+  const [name, setName] =
+    useState("");
+
+  const [email, setEmail] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const { colors } =
+    useAppTheme();
+
+  const styles =
+    createStyles(colors);
 
   const handleRegister = async () => {
-    const cleanName = name.trim();
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanName =
+      name.trim();
 
-    if (!cleanName || !cleanEmail || !password) {
-      Alert.alert(
-        "Hata",
-        "Ad soyad, e-posta ve şifre alanları zorunludur."
-      );
-      return;
-    }
+    const cleanEmail =
+      email.trim().toLowerCase();
 
-    if (cleanName.length < 2 || cleanName.length > 100) {
+    if (
+      cleanName.length < 2 ||
+      cleanName.length > 100
+    ) {
       Alert.alert(
         "Hata",
         "Ad soyad 2-100 karakter arasında olmalıdır."
@@ -40,190 +52,267 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!emailRegex.test(cleanEmail)) {
-      Alert.alert("Hata", "Geçerli bir e-posta adresi giriniz.");
+    if (
+      !emailRegex.test(cleanEmail)
+    ) {
+      Alert.alert(
+        "Hata",
+        "Geçerli bir e-posta adresi girin."
+      );
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert("Hata", "Şifre en az 6 karakter olmalıdır.");
+      Alert.alert(
+        "Hata",
+        "Şifre en az 6 karakter olmalıdır."
+      );
       return;
     }
 
     try {
       setLoading(true);
 
-      await api.post("/auth/register", {
-        name: cleanName,
-        email: cleanEmail,
-        password,
-      });
+      await api.post(
+        "/auth/register",
+        {
+          name: cleanName,
+          email: cleanEmail,
+          password,
+        }
+      );
 
       Alert.alert(
         "Başarılı",
-        "Kullanıcı hesabı oluşturuldu.",
+        "Hesabınız oluşturuldu. Giriş yapabilirsiniz.",
         [
           {
             text: "Tamam",
-            onPress: () => navigation.goBack(),
+            onPress: () =>
+              navigation.navigate(
+                "Login"
+              ),
           },
         ]
       );
     } catch (error) {
-      const message =
-        error.response?.data?.message ||
-        "Sunucuya bağlanırken bir hata oluştu.";
-
-      Alert.alert("Kayıt başarısız", message);
+      Alert.alert(
+        "Kayıt Hatası",
+        error.response?.data
+          ?.message ||
+          "Kayıt işlemi gerçekleştirilemedi."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.container}>
+      <TouchableOpacity
+        onPress={() =>
+          navigation.goBack()
+        }
       >
-        <Text style={styles.title}>Kayıt Ol</Text>
+        <Text style={styles.back}>
+          ‹ Geri
+        </Text>
+      </TouchableOpacity>
 
-        <Text style={styles.subtitle}>
-          Yeni kullanıcı hesabınızı oluşturun.
+      <Text style={styles.title}>
+        Kayıt Ol
+      </Text>
+
+      <Text style={styles.subtitle}>
+        Yeni bir hesap oluşturun
+      </Text>
+
+      <Text style={styles.label}>
+        Ad Soyad
+      </Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Ad Soyad"
+        placeholderTextColor={
+          colors.secondaryText
+        }
+        value={name}
+        onChangeText={setName}
+        maxLength={100}
+        editable={!loading}
+      />
+
+      <Text style={styles.label}>
+        E-posta
+      </Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="ornek@email.com"
+        placeholderTextColor={
+          colors.secondaryText
+        }
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!loading}
+      />
+
+      <Text style={styles.label}>
+        Şifre
+      </Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="En az 6 karakter"
+        placeholderTextColor={
+          colors.secondaryText
+        }
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        editable={!loading}
+      />
+
+      <TouchableOpacity
+        style={[
+          styles.button,
+          loading &&
+            styles.disabledButton,
+        ]}
+        onPress={handleRegister}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator
+            color={
+              colors.onPrimary
+            }
+          />
+        ) : (
+          <Text
+            style={styles.buttonText}
+          >
+            Kayıt Ol
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.loginRow}>
+        <Text
+          style={styles.normalText}
+        >
+          Zaten hesabınız var mı?{" "}
         </Text>
 
-        <Text style={styles.label}>Ad Soyad</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Ad Soyad"
-          autoCapitalize="words"
-          value={name}
-          onChangeText={setName}
-          editable={!loading}
-        />
-
-        <Text style={styles.label}>E-posta</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="ornek@email.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading}
-        />
-
-        <Text style={styles.label}>Şifre</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="En az 6 karakter"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          editable={!loading}
-        />
-
         <TouchableOpacity
-          style={styles.button}
-          onPress={handleRegister}
-          disabled={loading}
+          onPress={() =>
+            navigation.navigate(
+              "Login"
+            )
+          }
         >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.buttonText}>Kayıt Ol</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.loginContainer}>
-          <Text style={styles.loginText}>
-            Zaten hesabınız var mı?
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            disabled={loading}
+          <Text
+            style={styles.loginText}
           >
-            <Text style={styles.loginLink}> Giriş Yap</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            Giriş Yap
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor:
+        colors.background,
+      justifyContent: "center",
+      paddingHorizontal: 24,
+    },
 
-  content: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
+    back: {
+      color: colors.text,
+      fontSize: 16,
+      marginBottom: 20,
+    },
 
-  title: {
-    fontSize: 30,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
+    title: {
+      color: colors.text,
+      fontSize: 32,
+      fontWeight: "700",
+      marginBottom: 8,
+    },
 
-  subtitle: {
-    fontSize: 15,
-    marginBottom: 32,
-  },
+    subtitle: {
+      color:
+        colors.secondaryText,
+      fontSize: 15,
+      marginBottom: 30,
+    },
 
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
+    label: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "600",
+      marginBottom: 8,
+    },
 
-  input: {
-    height: 52,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    marginBottom: 18,
-  },
+    input: {
+      height: 52,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor:
+        colors.input,
+      color: colors.text,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      marginBottom: 18,
+      fontSize: 16,
+    },
 
-  button: {
-    height: 52,
-    backgroundColor: "#111827",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
-  },
+    button: {
+      height: 52,
+      backgroundColor:
+        colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 6,
+    },
 
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+    buttonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
 
-  loginContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 24,
-  },
+    disabledButton: {
+      opacity: 0.6,
+    },
 
-  loginText: {
-    fontSize: 14,
-  },
+    loginRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 24,
+    },
 
-  loginLink: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-});
+    normalText: {
+      color:
+        colors.secondaryText,
+    },
+
+    loginText: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+  });
+}

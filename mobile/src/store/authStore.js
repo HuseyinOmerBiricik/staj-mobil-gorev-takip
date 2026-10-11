@@ -1,24 +1,33 @@
 import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
 
-import api from "../services/api";
+import api, {
+  setUnauthorizedHandler,
+} from "../services/api";
 
 const useAuthStore = create((set) => ({
   user: null,
   isLoading: true,
 
   login: async (email, password) => {
-    const response = await api.post("/auth/login", {
-      email,
-      password,
-    });
+    const response = await api.post(
+      "/auth/login",
+      {
+        email,
+        password,
+      }
+    );
 
     const { token, user } = response.data;
 
-    await SecureStore.setItemAsync("token", token);
+    await SecureStore.setItemAsync(
+      "token",
+      token
+    );
 
     set({
       user,
+      isLoading: false,
     });
 
     return user;
@@ -26,7 +35,10 @@ const useAuthStore = create((set) => ({
 
   checkAuth: async () => {
     try {
-      const token = await SecureStore.getItemAsync("token");
+      const token =
+        await SecureStore.getItemAsync(
+          "token"
+        );
 
       if (!token) {
         set({
@@ -37,14 +49,17 @@ const useAuthStore = create((set) => ({
         return;
       }
 
-      const response = await api.get("/auth/me");
+      const response =
+        await api.get("/auth/me");
 
       set({
         user: response.data,
         isLoading: false,
       });
     } catch (error) {
-      await SecureStore.deleteItemAsync("token");
+      await SecureStore.deleteItemAsync(
+        "token"
+      );
 
       set({
         user: null,
@@ -54,12 +69,22 @@ const useAuthStore = create((set) => ({
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync("token");
+    await SecureStore.deleteItemAsync(
+      "token"
+    );
 
     set({
       user: null,
+      isLoading: false,
     });
   },
 }));
+
+setUnauthorizedHandler(() => {
+  useAuthStore.setState({
+    user: null,
+    isLoading: false,
+  });
+});
 
 export default useAuthStore;

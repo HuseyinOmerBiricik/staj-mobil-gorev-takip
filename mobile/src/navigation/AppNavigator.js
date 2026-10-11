@@ -1,43 +1,47 @@
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {
+  createBottomTabNavigator,
+} from "@react-navigation/bottom-tabs";
 
-import BoardListScreen from "../screens/BoardListScreen";
-import BoardFormScreen from "../screens/BoardFormScreen";
-import BoardDetailScreen from "../screens/BoardDetailScreen";
-import TaskDetailScreen from "../screens/TaskDetailScreen";
-import TaskFormScreen from "../screens/TaskFormScreen";
+import BoardNavigator from "./BoardNavigator";
+import ProfileScreen from "../screens/ProfileScreen";
+import SettingsScreen from "../screens/SettingsScreen";
 
-const Stack = createNativeStackNavigator();
+const Tab =
+  createBottomTabNavigator();
 
 export default function AppNavigator() {
   return (
-    <Stack.Navigator
+    <Tab.Navigator
       screenOptions={{
         headerShown: false,
       }}
     >
-      <Stack.Screen
-        name="BoardList"
-        component={BoardListScreen}
+      <Tab.Screen
+        name="BoardsTab"
+        component={BoardNavigator}
+        options={{
+          title: "Panolar",
+          tabBarLabel: "Panolar",
+        }}
       />
 
-      <Stack.Screen
-        name="BoardForm"
-        component={BoardFormScreen}
+      <Tab.Screen
+        name="ProfileTab"
+        component={ProfileScreen}
+        options={{
+          title: "Profil",
+          tabBarLabel: "Profil",
+        }}
       />
 
-      <Stack.Screen
-        name="BoardDetail"
-        component={BoardDetailScreen}
-            />
-      <Stack.Screen
-        name="TaskDetail"
-        component={TaskDetailScreen}
+      <Tab.Screen
+        name="SettingsTab"
+        component={SettingsScreen}
+        options={{
+          title: "Ayarlar",
+          tabBarLabel: "Ayarlar",
+        }}
       />
-
-      <Stack.Screen
-        name="TaskForm"
-        component={TaskFormScreen}
-      />
-    </Stack.Navigator>
+    </Tab.Navigator>
   );
 }

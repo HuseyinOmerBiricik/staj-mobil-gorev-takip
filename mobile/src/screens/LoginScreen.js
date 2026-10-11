@@ -1,185 +1,300 @@
 import { useState } from "react";
+
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   ActivityIndicator,
 } from "react-native";
 
 import useAuthStore from "../store/authStore";
-import api from "../services/api";
+import { useAppTheme } from "../theme/theme";
 
-export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+export default function LoginScreen({
+  navigation,
+}) {
+  const login = useAuthStore(
+    (state) => state.login
+  );
+
+  const [email, setEmail] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const { colors } =
+    useAppTheme();
+
+  const styles =
+    createStyles(colors);
 
   const handleLogin = async () => {
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail =
+      email.trim().toLowerCase();
 
-    if (!cleanEmail || !password) {
-      Alert.alert("Hata", "E-posta ve şifre zorunludur.");
+    if (!cleanEmail) {
+      Alert.alert(
+        "Hata",
+        "E-posta adresi zorunludur."
+      );
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!emailRegex.test(cleanEmail)) {
-      Alert.alert("Hata", "Geçerli bir e-posta adresi giriniz.");
+    if (
+      !emailRegex.test(cleanEmail)
+    ) {
+      Alert.alert(
+        "Hata",
+        "Geçerli bir e-posta adresi girin."
+      );
+      return;
+    }
+
+    if (!password) {
+      Alert.alert(
+        "Hata",
+        "Şifre zorunludur."
+      );
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert("Hata", "Şifre en az 6 karakter olmalıdır.");
+      Alert.alert(
+        "Hata",
+        "Şifre en az 6 karakter olmalıdır."
+      );
       return;
     }
 
     try {
       setLoading(true);
 
-      await login(cleanEmail, password);
-      
+      await login(
+        cleanEmail,
+        password
+      );
     } catch (error) {
+      console.log(
+        "LOGIN ERROR:",
+        {
+          message:
+            error?.message,
+          code:
+            error?.code,
+          status:
+            error?.response?.status,
+          data:
+            error?.response?.data,
+          baseURL:
+            error?.config?.baseURL,
+          url:
+            error?.config?.url,
+        }
+      );
+
       const message =
-        error.response?.data?.message ||
+        error?.response?.data
+          ?.message ||
+        error?.message ||
         "Sunucuya bağlanırken bir hata oluştu.";
 
-      Alert.alert("Giriş başarısız", message);
+      Alert.alert(
+        "Giriş Hatası",
+        message
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.content}>
-        <Text style={styles.title}>Giriş Yap</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>
+        Giriş Yap
+      </Text>
 
-        <Text style={styles.subtitle}>
-          Görev ve proje takip uygulamasına giriş yapın.
+      <Text style={styles.subtitle}>
+        Hesabınıza giriş yapın
+      </Text>
+
+      <Text style={styles.label}>
+        E-posta
+      </Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="ornek@email.com"
+        placeholderTextColor={
+          colors.secondaryText
+        }
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!loading}
+      />
+
+      <Text style={styles.label}>
+        Şifre
+      </Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Şifreniz"
+        placeholderTextColor={
+          colors.secondaryText
+        }
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        editable={!loading}
+      />
+
+      <TouchableOpacity
+        style={[
+          styles.loginButton,
+          loading &&
+            styles.disabledButton,
+        ]}
+        onPress={handleLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator
+            color={
+              colors.onPrimary
+            }
+          />
+        ) : (
+          <Text
+            style={
+              styles.loginButtonText
+            }
+          >
+            Giriş Yap
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      <View
+        style={styles.registerRow}
+      >
+        <Text
+          style={styles.normalText}
+        >
+          Hesabınız yok mu?{" "}
         </Text>
 
-        <Text style={styles.label}>E-posta</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="ornek@email.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading}
-        />
-
-        <Text style={styles.label}>Şifre</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Şifrenizi girin"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          editable={!loading}
-        />
-
         <TouchableOpacity
-          style={styles.button}
-          onPress={handleLogin}
+          onPress={() =>
+            navigation.navigate(
+              "Register"
+            )
+          }
           disabled={loading}
         >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.buttonText}>Giriş Yap</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.registerContainer}>
-          <Text style={styles.registerText}>Hesabınız yok mu?</Text>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Register")}
-            disabled={loading}
+          <Text
+            style={
+              styles.registerText
+            }
           >
-            <Text style={styles.registerLink}> Kayıt Ol</Text>
-          </TouchableOpacity>
-        </View>
+            Kayıt Ol
+          </Text>
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    justifyContent: "center",
-  },
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor:
+        colors.background,
+      justifyContent: "center",
+      paddingHorizontal: 24,
+    },
 
-  content: {
-    paddingHorizontal: 24,
-  },
+    title: {
+      fontSize: 32,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 8,
+    },
 
-  title: {
-    fontSize: 30,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
+    subtitle: {
+      fontSize: 15,
+      color:
+        colors.secondaryText,
+      marginBottom: 32,
+    },
 
-  subtitle: {
-    fontSize: 15,
-    marginBottom: 32,
-  },
+    label: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 8,
+    },
 
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
+    input: {
+      height: 52,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor:
+        colors.input,
+      color: colors.text,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      marginBottom: 20,
+      fontSize: 16,
+    },
 
-  input: {
-    height: 52,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    marginBottom: 18,
-  },
+    loginButton: {
+      height: 52,
+      backgroundColor:
+        colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 8,
+    },
 
-  button: {
-    height: 52,
-    backgroundColor: "#111827",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
-  },
+    disabledButton: {
+      opacity: 0.6,
+    },
 
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+    loginButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
 
-  registerContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 24,
-  },
+    registerRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 24,
+    },
 
-  registerText: {
-    fontSize: 14,
-  },
+    normalText: {
+      color:
+        colors.secondaryText,
+    },
 
-  registerLink: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-});
+    registerText: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+  });
+}
