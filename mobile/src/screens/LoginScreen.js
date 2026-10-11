@@ -160,7 +160,25 @@ export default function LoginScreen({
         secureTextEntry
         editable={!loading}
       />
-
+      <TouchableOpacity
+        onPress={() =>
+          navigation.navigate(
+            "ForgotPassword"
+          )
+        }
+        disabled={loading}
+        style={
+          styles.forgotButton
+        }
+      >
+        <Text
+          style={
+            styles.forgotText
+          }
+        >
+          Şifremi Unuttum
+        </Text>
+      </TouchableOpacity>
       <TouchableOpacity
         style={[
           styles.loginButton,
@@ -260,7 +278,17 @@ function createStyles(colors) {
       marginBottom: 20,
       fontSize: 16,
     },
+    forgotButton: {
+      alignSelf: "flex-end",
+      marginTop: -8,
+      marginBottom: 16,
+    },
 
+    forgotText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "600",
+    },
     loginButton: {
       height: 52,
       backgroundColor:

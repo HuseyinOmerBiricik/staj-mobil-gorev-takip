@@ -14,10 +14,11 @@ model User {
   avatarUrl    String?
   createdAt    DateTime @default(now())
 
-  boards           Board[]
-  comments         Comment[]
-  assignedTasks    Task[]
-  boardMemberships BoardMember[]
+  boards             Board[]
+  comments           Comment[]
+  assignedTasks      Task[]
+  boardMemberships   BoardMember[]
+  passwordResetCodes PasswordResetCode[]
 }
 
 model Board {
@@ -88,4 +89,18 @@ model Comment {
 
   @@index([taskId])
   @@index([userId])
+}
+
+model PasswordResetCode {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
