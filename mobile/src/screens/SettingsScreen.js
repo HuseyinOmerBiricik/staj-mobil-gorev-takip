@@ -6,21 +6,32 @@ import {
 } from "react-native";
 
 import useThemeStore from "../store/themeStore";
-import { useAppTheme } from "../theme/theme";
+
+import {
+  useAppTheme,
+} from "../theme/theme";
 
 export default function SettingsScreen() {
-  const theme = useThemeStore(
-    (state) => state.theme
-  );
+  const theme =
+    useThemeStore(
+      (state) =>
+        state.theme
+    );
 
-  const setTheme = useThemeStore(
-    (state) => state.setTheme
-  );
+  const setTheme =
+    useThemeStore(
+      (state) =>
+        state.setTheme
+    );
 
-  const { colors } = useAppTheme();
+  const {
+    colors,
+  } = useAppTheme();
 
   const styles =
-    createStyles(colors);
+    createStyles(
+      colors
+    );
 
   const ThemeOption = ({
     value,
@@ -34,6 +45,7 @@ export default function SettingsScreen() {
       <TouchableOpacity
         style={[
           styles.option,
+
           selected &&
             styles.optionSelected,
         ]}
@@ -41,8 +53,16 @@ export default function SettingsScreen() {
           setTheme(value)
         }
       >
-        <View style={styles.optionText}>
-          <Text style={styles.optionTitle}>
+        <View
+          style={
+            styles.optionText
+          }
+        >
+          <Text
+            style={
+              styles.optionTitle
+            }
+          >
             {title}
           </Text>
 
@@ -58,6 +78,7 @@ export default function SettingsScreen() {
         <View
           style={[
             styles.radio,
+
             selected &&
               styles.radioSelected,
           ]}
@@ -75,12 +96,24 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
+    <View
+      style={
+        styles.container
+      }
+    >
+      <Text
+        style={
+          styles.title
+        }
+      >
         Ayarlar
       </Text>
 
-      <Text style={styles.sectionTitle}>
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
         Görünüm
       </Text>
 
@@ -102,85 +135,127 @@ export default function SettingsScreen() {
         description="Telefonun açık veya karanlık tema ayarını takip et."
       />
 
-      <Text style={styles.info}>
-        Tema tercihiniz cihazda saklanır ve uygulama
-        tekrar açıldığında korunur.
+      <Text
+        style={
+          styles.info
+        }
+      >
+        Tema tercihiniz cihazda saklanır ve uygulama tekrar açıldığında korunur.
       </Text>
     </View>
   );
 }
 
-function createStyles(colors) {
+function createStyles(
+  colors
+) {
   return StyleSheet.create({
     container: {
       flex: 1,
+
       backgroundColor:
         colors.background,
+
       paddingHorizontal: 24,
+
       paddingTop: 60,
     },
 
     title: {
       fontSize: 30,
+
       fontWeight: "700",
-      color: colors.text,
+
+      color:
+        colors.text,
+
       marginBottom: 32,
     },
 
     sectionTitle: {
       fontSize: 15,
+
       fontWeight: "700",
-      color: colors.text,
+
+      color:
+        colors.text,
+
       marginBottom: 12,
     },
 
     option: {
       minHeight: 78,
+
       borderWidth: 1,
-      borderColor: colors.border,
+
+      borderColor:
+        colors.border,
+
       borderRadius: 12,
+
       padding: 16,
+
       marginBottom: 12,
+
       backgroundColor:
         colors.card,
+
       flexDirection: "row",
-      alignItems: "center",
+
+      alignItems:
+        "center",
     },
 
     optionSelected: {
       borderColor:
         colors.primary,
+
       borderWidth: 2,
     },
 
     optionText: {
       flex: 1,
+
       paddingRight: 16,
     },
 
     optionTitle: {
       fontSize: 16,
+
       fontWeight: "700",
-      color: colors.text,
+
+      color:
+        colors.text,
     },
 
     optionDescription: {
       fontSize: 13,
+
       color:
         colors.secondaryText,
+
       marginTop: 5,
+
       lineHeight: 18,
     },
 
     radio: {
       width: 22,
+
       height: 22,
+
       borderRadius: 11,
+
       borderWidth: 2,
+
       borderColor:
         colors.border,
-      alignItems: "center",
-      justifyContent: "center",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
     },
 
     radioSelected: {
@@ -190,8 +265,11 @@ function createStyles(colors) {
 
     radioInner: {
       width: 10,
+
       height: 10,
+
       borderRadius: 5,
+
       backgroundColor:
         colors.primary,
     },
@@ -199,8 +277,11 @@ function createStyles(colors) {
     info: {
       color:
         colors.secondaryText,
+
       fontSize: 12,
+
       lineHeight: 18,
+
       marginTop: 10,
     },
   });

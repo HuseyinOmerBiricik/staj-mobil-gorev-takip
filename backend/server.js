@@ -9,20 +9,28 @@ import taskRoutes from "./src/routes/taskRoutes.js";
 import userRoutes from "./src/routes/userRoutes.js";
 import commentRoutes from "./src/routes/commentRoutes.js";
 import boardMemberRoutes from "./src/routes/boardMemberRoutes.js";
+import reminderRoutes from "./src/routes/reminderRoutes.js";
 
-const app = express();
+const app =
+  express();
 
 const PORT =
-  process.env.PORT || 3000;
+  process.env.PORT ||
+  3000;
 
-app.use(express.json());
+app.use(
+  express.json()
+);
 
-app.get("/", (req, res) => {
-  res.json({
-    message:
-      "Staj Mobil Proje API çalışıyor.",
-  });
-});
+app.get(
+  "/",
+  (req, res) => {
+    res.json({
+      message:
+        "Staj Mobil Proje API çalışıyor.",
+    });
+  }
+);
 
 app.use(
   "/api/auth",
@@ -57,6 +65,11 @@ app.use(
 app.use(
   "/api",
   boardMemberRoutes
+);
+
+app.use(
+  "/api",
+  reminderRoutes
 );
 
 app.listen(

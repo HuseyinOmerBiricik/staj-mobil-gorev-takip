@@ -1,149 +1,201 @@
-import { create } from "zustand";
+import {
+  create,
+} from "zustand";
 
 import api from "../services/api";
 
-const useTaskStore = create((set, get) => ({
-  tasksByList: {},
+const useTaskStore =
+  create((set, get) => ({
+    tasksByList: {},
 
-  fetchTasks: async (listId) => {
-    const response = await api.get(
-      `/lists/${listId}/tasks`
-    );
+    fetchTasks:
+      async (listId) => {
+        const response =
+          await api.get(
+            `/lists/${listId}/tasks`
+          );
 
-    set({
-      tasksByList: {
-        ...get().tasksByList,
-        [listId]: response.data,
+        set({
+          tasksByList: {
+            ...get()
+              .tasksByList,
+
+            [listId]:
+              response.data,
+          },
+        });
+
+        return response.data;
       },
-    });
 
-    return response.data;
-  },
+    createTask:
+      async (
+        listId,
+        data
+      ) => {
+        const response =
+          await api.post(
+            `/lists/${listId}/tasks`,
+            data
+          );
 
-  createTask: async (listId, data) => {
-    const response = await api.post(
-      `/lists/${listId}/tasks`,
-      data
-    );
+        const current =
+          get().tasksByList[
+            listId
+          ] || [];
 
-    const current =
-      get().tasksByList[listId] || [];
+        set({
+          tasksByList: {
+            ...get()
+              .tasksByList,
 
-    set({
-      tasksByList: {
-        ...get().tasksByList,
-        [listId]: [...current, response.data],
+            [listId]: [
+              ...current,
+              response.data,
+            ],
+          },
+        });
+
+        return response.data;
       },
-    });
 
-    return response.data;
-  },
+    updateTask:
+      async (
+        taskId,
+        listId,
+        data
+      ) => {
+        const response =
+          await api.put(
+            `/tasks/${taskId}`,
+            data
+          );
 
-  updateTask: async (
-    taskId,
-    listId,
-    data
-  ) => {
-    const response = await api.put(
-      `/tasks/${taskId}`,
-      data
-    );
+        const current =
+          get().tasksByList[
+            listId
+          ] || [];
 
-    const current =
-      get().tasksByList[listId] || [];
+        set({
+          tasksByList: {
+            ...get()
+              .tasksByList,
 
-    set({
-      tasksByList: {
-        ...get().tasksByList,
-        [listId]: current.map((task) =>
-          task.id === taskId
-            ? response.data
-            : task
-        ),
+            [listId]:
+              current.map(
+                (task) =>
+                  task.id ===
+                  taskId
+                    ? response.data
+                    : task
+              ),
+          },
+        });
+
+        return response.data;
       },
-    });
 
-    return response.data;
-  },
+    deleteTask:
+      async (
+        taskId,
+        listId
+      ) => {
+        await api.delete(
+          `/tasks/${taskId}`
+        );
 
-  deleteTask: async (
-    taskId,
-    listId
-  ) => {
-    await api.delete(
-      `/tasks/${taskId}`
-    );
+        const current =
+          get().tasksByList[
+            listId
+          ] || [];
 
-    const current =
-      get().tasksByList[listId] || [];
+        set({
+          tasksByList: {
+            ...get()
+              .tasksByList,
 
-    set({
-      tasksByList: {
-        ...get().tasksByList,
-        [listId]: current.filter(
-          (task) => task.id !== taskId
-        ),
+            [listId]:
+              current.filter(
+                (task) =>
+                  task.id !==
+                  taskId
+              ),
+          },
+        });
       },
-    });
-  },
 
-  moveTask: async (
-    taskId,
-    sourceListId,
-    targetListId,
-    order
-  ) => {
-    await api.patch(
-      `/tasks/${taskId}/move`,
-      {
-        listId: targetListId,
-        order,
-      }
-    );
+    moveTask:
+      async (
+        taskId,
+        sourceListId,
+        targetListId,
+        order
+      ) => {
+        await api.patch(
+          `/tasks/${taskId}/move`,
+          {
+            listId:
+              targetListId,
 
-    if (sourceListId === targetListId) {
-      const response = await api.get(
-        `/lists/${sourceListId}/tasks`
-      );
+            order,
+          }
+        );
 
+        if (
+          sourceListId ===
+          targetListId
+        ) {
+          const response =
+            await api.get(
+              `/lists/${sourceListId}/tasks`
+            );
+
+          set({
+            tasksByList: {
+              ...get()
+                .tasksByList,
+
+              [sourceListId]:
+                response.data,
+            },
+          });
+
+          return;
+        }
+
+        const [
+          sourceResponse,
+          targetResponse,
+        ] =
+          await Promise.all([
+            api.get(
+              `/lists/${sourceListId}/tasks`
+            ),
+
+            api.get(
+              `/lists/${targetListId}/tasks`
+            ),
+          ]);
+
+        set({
+          tasksByList: {
+            ...get()
+              .tasksByList,
+
+            [sourceListId]:
+              sourceResponse.data,
+
+            [targetListId]:
+              targetResponse.data,
+          },
+        });
+      },
+
+    clearTasks: () => {
       set({
-        tasksByList: {
-          ...get().tasksByList,
-          [sourceListId]: response.data,
-        },
+        tasksByList: {},
       });
-
-      return;
-    }
-
-    const [
-      sourceResponse,
-      targetResponse,
-    ] = await Promise.all([
-      api.get(
-        `/lists/${sourceListId}/tasks`
-      ),
-      api.get(
-        `/lists/${targetListId}/tasks`
-      ),
-    ]);
-
-    set({
-      tasksByList: {
-        ...get().tasksByList,
-        [sourceListId]:
-          sourceResponse.data,
-        [targetListId]:
-          targetResponse.data,
-      },
-    });
-  },
-
-  clearTasks: () => {
-    set({
-      tasksByList: {},
-    });
-  },
-}));
+    },
+  }));
 
 export default useTaskStore;

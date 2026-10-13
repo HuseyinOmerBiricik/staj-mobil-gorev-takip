@@ -20,19 +20,28 @@ import { StatusBar } from "expo-status-bar";
 import RootNavigator from "./src/navigation/RootNavigator";
 
 import useThemeStore from "./src/store/themeStore";
-import { useAppTheme } from "./src/theme/theme";
+
+import {
+  useAppTheme,
+} from "./src/theme/theme";
 
 export default function App() {
-  const loadTheme = useThemeStore(
-    (state) => state.loadTheme
-  );
+  const loadTheme =
+    useThemeStore(
+      (state) =>
+        state.loadTheme
+    );
 
-  const isHydrated = useThemeStore(
-    (state) => state.isHydrated
-  );
+  const isHydrated =
+    useThemeStore(
+      (state) =>
+        state.isHydrated
+    );
 
-  const { isDark, colors } =
-    useAppTheme();
+  const {
+    isDark,
+    colors,
+  } = useAppTheme();
 
   useEffect(() => {
     loadTheme();
@@ -48,19 +57,32 @@ export default function App() {
         ? DarkTheme.colors
         : DefaultTheme.colors),
 
-      primary: colors.primary,
-      background: colors.background,
-      card: colors.card,
-      text: colors.text,
-      border: colors.border,
-      notification: colors.danger,
+      primary:
+        colors.primary,
+
+      background:
+        colors.background,
+
+      card:
+        colors.card,
+
+      text:
+        colors.text,
+
+      border:
+        colors.border,
+
+      notification:
+        colors.danger,
     },
   };
 
   if (!isHydrated) {
     return (
       <GestureHandlerRootView
-        style={{ flex: 1 }}
+        style={{
+          flex: 1,
+        }}
       >
         <View
           style={{
@@ -73,7 +95,9 @@ export default function App() {
         >
           <ActivityIndicator
             size="large"
-            color={colors.text}
+            color={
+              colors.text
+            }
           />
         </View>
       </GestureHandlerRootView>
@@ -82,7 +106,9 @@ export default function App() {
 
   return (
     <GestureHandlerRootView
-      style={{ flex: 1 }}
+      style={{
+        flex: 1,
+      }}
     >
       <StatusBar
         style={
@@ -93,7 +119,9 @@ export default function App() {
       />
 
       <NavigationContainer
-        theme={navigationTheme}
+        theme={
+          navigationTheme
+        }
       >
         <RootNavigator />
       </NavigationContainer>
