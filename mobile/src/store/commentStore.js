@@ -1,233 +1,667 @@
-import { create } from "zustand";
+import {
+  create,
+} from "zustand";
 
 import api from "../services/api";
 
-const useCommentStore = create(
-  (set, get) => ({
-    commentsByTask: {},
+import useAuthStore from "./authStore";
 
-    isLoading: false,
-    isSaving: false,
+import {
+  cacheComments,
+  getCachedComments,
+  createTempId,
+  resolveStoredId,
+} from "../services/offlineStorage";
 
-    error: null,
+import {
+  isNetworkError,
+  isOfflineNow,
+  queueMutation,
+} from "./syncStore";
 
-    fetchComments: async (
+async function saveComments(
+  taskId,
+  comments
+) {
+  const resolvedTaskId =
+    await resolveStoredId(
       taskId
-    ) => {
-      try {
-        set({
-          isLoading: true,
-          error: null,
-        });
+    );
 
-        const response =
-          await api.get(
-            `/tasks/${taskId}/comments`
-          );
+  await cacheComments(
+    resolvedTaskId,
+    comments
+  );
+}
 
-        set((state) => ({
-          commentsByTask: {
-            ...state.commentsByTask,
+const useCommentStore =
+  create(
+    (set, get) => ({
+      commentsByTask:
+        {},
 
-            [taskId]:
-              response.data,
-          },
+      isLoading:
+        false,
 
-          error: null,
-        }));
+      isSaving:
+        false,
 
-        return response.data;
-      } catch (error) {
-        set({
-          error:
-            error.response?.data
-              ?.message ||
-            "Yorumlar yüklenemedi.",
-        });
+      error:
+        null,
 
-        throw error;
-      } finally {
-        set({
-          isLoading: false,
-        });
-      }
-    },
+      fetchComments:
+        async (
+          taskId
+        ) => {
+          const resolvedTaskId =
+            await resolveStoredId(
+              taskId
+            );
 
-    addComment: async (
-      taskId,
-      content
-    ) => {
-      try {
-        set({
-          isSaving: true,
-          error: null,
-        });
+          try {
+            set({
+              isLoading:
+                true,
 
-        const response =
-          await api.post(
-            `/tasks/${taskId}/comments`,
-            {
-              content,
+              error: null,
+            });
+
+            const response =
+              await api.get(
+                `/tasks/${resolvedTaskId}/comments`
+              );
+
+            set(
+              (state) => ({
+                commentsByTask: {
+                  ...state
+                    .commentsByTask,
+
+                  [taskId]:
+                    response.data,
+                },
+
+                error: null,
+              })
+            );
+
+            await cacheComments(
+              resolvedTaskId,
+              response.data
+            );
+
+            return response.data;
+          } catch (error) {
+            if (
+              isNetworkError(
+                error
+              )
+            ) {
+              const cached =
+                await getCachedComments(
+                  resolvedTaskId
+                );
+
+              set(
+                (state) => ({
+                  commentsByTask: {
+                    ...state
+                      .commentsByTask,
+
+                    [taskId]:
+                      cached,
+                  },
+
+                  error:
+                    null,
+                })
+              );
+
+              return cached;
             }
-          );
 
-        set((state) => ({
-          commentsByTask: {
-            ...state.commentsByTask,
+            set({
+              error:
+                error.response
+                  ?.data
+                  ?.message ||
+                "Yorumlar yüklenemedi.",
+            });
 
-            [taskId]: [
-              ...(
-                state
-                  .commentsByTask[
-                  taskId
-                ] || []
-              ),
+            throw error;
+          } finally {
+            set({
+              isLoading:
+                false,
+            });
+          }
+        },
 
-              response.data,
-            ],
-          },
-        }));
+      addComment:
+        async (
+          taskId,
+          content
+        ) => {
+          try {
+            set({
+              isSaving:
+                true,
 
-        return response.data;
-      } catch (error) {
-        set({
-          error:
-            error.response?.data
-              ?.message ||
-            "Yorum eklenemedi.",
-        });
+              error: null,
+            });
 
-        throw error;
-      } finally {
-        set({
-          isSaving: false,
-        });
-      }
-    },
+            const resolvedTaskId =
+              await resolveStoredId(
+                taskId
+              );
 
-    updateComment: async (
-      taskId,
-      commentId,
-      content
-    ) => {
-      try {
-        set({
-          isSaving: true,
-          error: null,
-        });
+            const offline =
+              await isOfflineNow();
 
-        const response =
-          await api.put(
-            `/comments/${commentId}`,
-            {
-              content,
+            if (!offline) {
+              try {
+                const response =
+                  await api.post(
+                    `/tasks/${resolvedTaskId}/comments`,
+                    {
+                      content,
+                    }
+                  );
+
+                const current =
+                  get()
+                    .commentsByTask[
+                    taskId
+                  ] || [];
+
+                const next = [
+                  ...current,
+                  response.data,
+                ];
+
+                set(
+                  (state) => ({
+                    commentsByTask: {
+                      ...state
+                        .commentsByTask,
+
+                      [taskId]:
+                        next,
+                    },
+                  })
+                );
+
+                await saveComments(
+                  taskId,
+                  next
+                );
+
+                return response.data;
+              } catch (error) {
+                if (
+                  !isNetworkError(
+                    error
+                  )
+                ) {
+                  throw error;
+                }
+              }
             }
-          );
 
-        set((state) => ({
-          commentsByTask: {
-            ...state.commentsByTask,
+            const user =
+              useAuthStore
+                .getState()
+                .user;
 
-            [taskId]: (
-              state
+            const tempId =
+              createTempId();
+
+            const now =
+              new Date().toISOString();
+
+            const tempComment = {
+              id: tempId,
+
+              taskId,
+
+              userId:
+                user?.id,
+
+              content,
+
+              createdAt:
+                now,
+
+              updatedAt:
+                now,
+
+              user: user
+                ? {
+                    id:
+                      user.id,
+
+                    name:
+                      user.name,
+
+                    email:
+                      user.email,
+                  }
+                : null,
+
+              _offline:
+                true,
+            };
+
+            const current =
+              get()
                 .commentsByTask[
                 taskId
-              ] || []
-            ).map((comment) =>
-              comment.id ===
-              commentId
-                ? response.data
-                : comment
-            ),
-          },
-        }));
+              ] || [];
 
-        return response.data;
-      } catch (error) {
-        set({
-          error:
-            error.response?.data
-              ?.message ||
-            "Yorum güncellenemedi.",
-        });
+            const next = [
+              ...current,
+              tempComment,
+            ];
 
-        throw error;
-      } finally {
-        set({
-          isSaving: false,
-        });
-      }
-    },
+            set(
+              (state) => ({
+                commentsByTask: {
+                  ...state
+                    .commentsByTask,
 
-    deleteComment: async (
-      taskId,
-      commentId
-    ) => {
-      try {
-        set({
-          isSaving: true,
-          error: null,
-        });
+                  [taskId]:
+                    next,
+                },
+              })
+            );
 
-        await api.delete(
-          `/comments/${commentId}`
-        );
+            await saveComments(
+              taskId,
+              next
+            );
 
-        set((state) => ({
-          commentsByTask: {
-            ...state.commentsByTask,
+            await queueMutation({
+              method:
+                "post",
 
-            [taskId]: (
-              state
-                .commentsByTask[
-                taskId
-              ] || []
-            ).filter(
-              (comment) =>
-                comment.id !==
+              url:
+                `/tasks/${resolvedTaskId}/comments`,
+
+              data: {
+                content,
+              },
+
+              entityType:
+                "comment",
+
+              tempId,
+            });
+
+            return tempComment;
+          } catch (error) {
+            set({
+              error:
+                error.response
+                  ?.data
+                  ?.message ||
+                "Yorum eklenemedi.",
+            });
+
+            throw error;
+          } finally {
+            set({
+              isSaving:
+                false,
+            });
+          }
+        },
+
+      updateComment:
+        async (
+          taskId,
+          commentId,
+          content
+        ) => {
+          try {
+            set({
+              isSaving:
+                true,
+
+              error: null,
+            });
+
+            const resolvedCommentId =
+              await resolveStoredId(
                 commentId
-            ),
-          },
-        }));
-      } catch (error) {
-        set({
-          error:
-            error.response?.data
-              ?.message ||
-            "Yorum silinemedi.",
-        });
+              );
 
-        throw error;
-      } finally {
-        set({
-          isSaving: false,
-        });
-      }
-    },
+            const offline =
+              await isOfflineNow();
 
-    clearComments: (
-      taskId
-    ) => {
-      if (taskId == null) {
-        set({
-          commentsByTask: {},
-          error: null,
-        });
+            if (!offline) {
+              try {
+                const response =
+                  await api.put(
+                    `/comments/${resolvedCommentId}`,
+                    {
+                      content,
+                    }
+                  );
 
-        return;
-      }
+                const current =
+                  get()
+                    .commentsByTask[
+                    taskId
+                  ] || [];
 
-      const next = {
-        ...get().commentsByTask,
-      };
+                const next =
+                  current.map(
+                    (comment) =>
+                      Number(
+                        comment.id
+                      ) ===
+                        Number(
+                          commentId
+                        ) ||
+                      Number(
+                        comment.id
+                      ) ===
+                        Number(
+                          resolvedCommentId
+                        )
+                        ? response.data
+                        : comment
+                  );
 
-      delete next[taskId];
+                set(
+                  (state) => ({
+                    commentsByTask: {
+                      ...state
+                        .commentsByTask,
 
-      set({
-        commentsByTask: next,
-      });
-    },
-  })
-);
+                      [taskId]:
+                        next,
+                    },
+                  })
+                );
+
+                await saveComments(
+                  taskId,
+                  next
+                );
+
+                return response.data;
+              } catch (error) {
+                if (
+                  !isNetworkError(
+                    error
+                  )
+                ) {
+                  throw error;
+                }
+              }
+            }
+
+            const current =
+              get()
+                .commentsByTask[
+                taskId
+              ] || [];
+
+            const next =
+              current.map(
+                (comment) =>
+                  Number(
+                    comment.id
+                  ) ===
+                    Number(
+                      commentId
+                    ) ||
+                  Number(
+                    comment.id
+                  ) ===
+                    Number(
+                      resolvedCommentId
+                    )
+                    ? {
+                        ...comment,
+                        content,
+                        updatedAt:
+                          new Date().toISOString(),
+                        _offline:
+                          true,
+                      }
+                    : comment
+              );
+
+            set(
+              (state) => ({
+                commentsByTask: {
+                  ...state
+                    .commentsByTask,
+
+                  [taskId]:
+                    next,
+                },
+              })
+            );
+
+            await saveComments(
+              taskId,
+              next
+            );
+
+            await queueMutation({
+              method:
+                "put",
+
+              url:
+                `/comments/${resolvedCommentId}`,
+
+              data: {
+                content,
+              },
+
+              entityType:
+                "comment",
+            });
+
+            return next.find(
+              (comment) =>
+                Number(
+                  comment.id
+                ) ===
+                  Number(
+                    commentId
+                  ) ||
+                Number(
+                  comment.id
+                ) ===
+                  Number(
+                    resolvedCommentId
+                  )
+            );
+          } finally {
+            set({
+              isSaving:
+                false,
+            });
+          }
+        },
+
+      deleteComment:
+        async (
+          taskId,
+          commentId
+        ) => {
+          try {
+            set({
+              isSaving:
+                true,
+
+              error: null,
+            });
+
+            const resolvedCommentId =
+              await resolveStoredId(
+                commentId
+              );
+
+            const offline =
+              await isOfflineNow();
+
+            if (!offline) {
+              try {
+                await api.delete(
+                  `/comments/${resolvedCommentId}`
+                );
+
+                const current =
+                  get()
+                    .commentsByTask[
+                    taskId
+                  ] || [];
+
+                const next =
+                  current.filter(
+                    (comment) =>
+                      Number(
+                        comment.id
+                      ) !==
+                        Number(
+                          commentId
+                        ) &&
+                      Number(
+                        comment.id
+                      ) !==
+                        Number(
+                          resolvedCommentId
+                        )
+                  );
+
+                set(
+                  (state) => ({
+                    commentsByTask: {
+                      ...state
+                        .commentsByTask,
+
+                      [taskId]:
+                        next,
+                    },
+                  })
+                );
+
+                await saveComments(
+                  taskId,
+                  next
+                );
+
+                return;
+              } catch (error) {
+                if (
+                  !isNetworkError(
+                    error
+                  )
+                ) {
+                  throw error;
+                }
+              }
+            }
+
+            const current =
+              get()
+                .commentsByTask[
+                taskId
+              ] || [];
+
+            const next =
+              current.filter(
+                (comment) =>
+                  Number(
+                    comment.id
+                  ) !==
+                    Number(
+                      commentId
+                    ) &&
+                  Number(
+                    comment.id
+                  ) !==
+                    Number(
+                      resolvedCommentId
+                    )
+              );
+
+            set(
+              (state) => ({
+                commentsByTask: {
+                  ...state
+                    .commentsByTask,
+
+                  [taskId]:
+                    next,
+                },
+              })
+            );
+
+            await saveComments(
+              taskId,
+              next
+            );
+
+            await queueMutation({
+              method:
+                "delete",
+
+              url:
+                `/comments/${resolvedCommentId}`,
+
+              data: null,
+
+              entityType:
+                "comment",
+            });
+          } finally {
+            set({
+              isSaving:
+                false,
+            });
+          }
+        },
+
+      clearComments:
+        (
+          taskId
+        ) => {
+          if (
+            taskId ==
+            null
+          ) {
+            set({
+              commentsByTask:
+                {},
+
+              error:
+                null,
+            });
+
+            return;
+          }
+
+          const next = {
+            ...get()
+              .commentsByTask,
+          };
+
+          delete next[
+            taskId
+          ];
+
+          set({
+            commentsByTask:
+              next,
+          });
+        },
+    })
+  );
 
 export default useCommentStore;

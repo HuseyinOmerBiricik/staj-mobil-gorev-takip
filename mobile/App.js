@@ -1,4 +1,6 @@
-import { useEffect } from "react";
+import {
+  useEffect,
+} from "react";
 
 import {
   View,
@@ -15,11 +17,14 @@ import {
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 
-import { StatusBar } from "expo-status-bar";
+import {
+  StatusBar,
+} from "expo-status-bar";
 
 import RootNavigator from "./src/navigation/RootNavigator";
 
 import useThemeStore from "./src/store/themeStore";
+import useSyncStore from "./src/store/syncStore";
 
 import {
   useAppTheme,
@@ -38,14 +43,40 @@ export default function App() {
         state.isHydrated
     );
 
+  const initializeSync =
+    useSyncStore(
+      (state) =>
+        state.initialize
+    );
+
+  const stopSync =
+    useSyncStore(
+      (state) =>
+        state.stop
+    );
+
   const {
     isDark,
     colors,
-  } = useAppTheme();
+  } =
+    useAppTheme();
 
   useEffect(() => {
     loadTheme();
-  }, [loadTheme]);
+  }, [
+    loadTheme,
+  ]);
+
+  useEffect(() => {
+    initializeSync();
+
+    return () => {
+      stopSync();
+    };
+  }, [
+    initializeSync,
+    stopSync,
+  ]);
 
   const navigationTheme = {
     ...(isDark
@@ -77,7 +108,9 @@ export default function App() {
     },
   };
 
-  if (!isHydrated) {
+  if (
+    !isHydrated
+  ) {
     return (
       <GestureHandlerRootView
         style={{
@@ -87,8 +120,13 @@ export default function App() {
         <View
           style={{
             flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
+
+            alignItems:
+              "center",
+
+            justifyContent:
+              "center",
+
             backgroundColor:
               colors.background,
           }}

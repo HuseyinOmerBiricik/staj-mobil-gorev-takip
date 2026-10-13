@@ -4,6 +4,15 @@ import {
 
 import api from "../services/api";
 
+import {
+  cacheReminders,
+  getCachedReminders,
+} from "../services/offlineStorage";
+
+import {
+  isNetworkError,
+} from "./syncStore";
+
 function getStartOfDay(
   value
 ) {
@@ -39,7 +48,9 @@ function getReminderStatus(
         86400000
     );
 
-  if (difference < 0) {
+  if (
+    difference < 0
+  ) {
     return {
       status:
         "overdue",
@@ -49,21 +60,27 @@ function getReminderStatus(
     };
   }
 
-  if (difference === 0) {
+  if (
+    difference === 0
+  ) {
     return {
       status:
         "today",
 
-      dayDifference: 0,
+      dayDifference:
+        0,
     };
   }
 
-  if (difference === 1) {
+  if (
+    difference === 1
+  ) {
     return {
       status:
         "tomorrow",
 
-      dayDifference: 1,
+      dayDifference:
+        1,
     };
   }
 
@@ -132,39 +149,71 @@ function calculateCounts(
   return counts;
 }
 
+const EMPTY_COUNTS = {
+  total: 0,
+  overdue: 0,
+  today: 0,
+  tomorrow: 0,
+  upcoming: 0,
+};
+
 const useReminderStore =
   create(
     (set) => ({
-      reminders: [],
+      reminders:
+        [],
 
       counts: {
-        total: 0,
-        overdue: 0,
-        today: 0,
-        tomorrow: 0,
-        upcoming: 0,
+        ...EMPTY_COUNTS,
       },
 
-      isLoading: false,
+      isLoading:
+        false,
 
-      error: null,
+      error:
+        null,
 
       fetchReminders:
         async () => {
           try {
             set({
-              isLoading: true,
-              error: null,
+              isLoading:
+                true,
+
+              error:
+                null,
             });
 
-            const response =
-              await api.get(
-                "/reminders"
+            let rawTasks;
+
+            try {
+              const response =
+                await api.get(
+                  "/reminders"
+                );
+
+              rawTasks =
+                response.data;
+
+              await cacheReminders(
+                rawTasks
               );
+            } catch (error) {
+              if (
+                !isNetworkError(
+                  error
+                )
+              ) {
+                throw error;
+              }
+
+              rawTasks =
+                await getCachedReminders();
+            }
 
             const reminders =
               prepareReminders(
-                response.data
+                rawTasks
               );
 
             const counts =
@@ -174,8 +223,11 @@ const useReminderStore =
 
             set({
               reminders,
+
               counts,
-              error: null,
+
+              error:
+                null,
             });
 
             return {
@@ -206,17 +258,15 @@ const useReminderStore =
       clearReminders:
         () => {
           set({
-            reminders: [],
+            reminders:
+              [],
 
             counts: {
-              total: 0,
-              overdue: 0,
-              today: 0,
-              tomorrow: 0,
-              upcoming: 0,
+              ...EMPTY_COUNTS,
             },
 
-            error: null,
+            error:
+              null,
           });
         },
     })

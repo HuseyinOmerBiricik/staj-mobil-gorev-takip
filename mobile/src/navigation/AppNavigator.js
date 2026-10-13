@@ -13,6 +13,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 
 import useReminderStore from "../store/reminderStore";
+import useSyncStore from "../store/syncStore";
 
 const Tab =
   createBottomTabNavigator();
@@ -28,6 +29,12 @@ export default function AppNavigator() {
     useReminderStore(
       (state) =>
         state.counts
+    );
+
+  const pendingCount =
+    useSyncStore(
+      (state) =>
+        state.pendingCount
     );
 
   useEffect(() => {
@@ -119,6 +126,12 @@ export default function AppNavigator() {
 
           tabBarLabel:
             "Ayarlar",
+
+          tabBarBadge:
+            pendingCount >
+            0
+              ? pendingCount
+              : undefined,
         }}
       />
     </Tab.Navigator>

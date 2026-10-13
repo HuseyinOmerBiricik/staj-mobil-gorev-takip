@@ -1,72 +1,497 @@
-import { create } from "zustand";
+import {
+  create,
+} from "zustand";
+
 import api from "../services/api";
 
-const useListStore = create((set, get) => ({
-  lists: [],
-  isLoading: false,
+import {
+  cacheLists,
+  getCachedLists,
+  createTempId,
+  resolveStoredId,
+} from "../services/offlineStorage";
 
-  fetchLists: async (boardId) => {
-  try {
-    set({ isLoading: true });
+import {
+  isNetworkError,
+  isOfflineNow,
+  queueMutation,
+} from "./syncStore";
 
-    const response = await api.get(
-      `/boards/${boardId}/lists`
-    );
-
-    set({
-      lists: response.data,
-    });
-
-    return response.data;
-  } finally {
-    set({ isLoading: false });
+async function saveLists(
+  boardId,
+  lists
+) {
+  if (
+    boardId === null ||
+    boardId === undefined
+  ) {
+    return;
   }
-},
 
-  createList: async (boardId, title) => {
-    const response = await api.post(
-      `/boards/${boardId}/lists`,
-      {
-        title,
-      }
+  const resolvedBoardId =
+    await resolveStoredId(
+      boardId
     );
 
-    set({
-      lists: [...get().lists, response.data].sort(
-        (a, b) => a.order - b.order
-      ),
-    });
+  await cacheLists(
+    resolvedBoardId,
+    lists
+  );
+}
 
-    return response.data;
-  },
-
-  updateList: async (id, data) => {
-    const response = await api.put(`/lists/${id}`, data);
-
-    set({
-      lists: get()
-        .lists.map((list) =>
-          list.id === id ? response.data : list
-        )
-        .sort((a, b) => a.order - b.order),
-    });
-
-    return response.data;
-  },
-
-  deleteList: async (id) => {
-    await api.delete(`/lists/${id}`);
-
-    set({
-      lists: get().lists.filter((list) => list.id !== id),
-    });
-  },
-
-  clearLists: () => {
-    set({
+const useListStore =
+  create(
+    (set, get) => ({
       lists: [],
-    });
-  },
-}));
+
+      currentBoardId:
+        null,
+
+      isLoading:
+        false,
+
+      fetchLists:
+        async (
+          boardId
+        ) => {
+          const resolvedBoardId =
+            await resolveStoredId(
+              boardId
+            );
+
+          try {
+            set({
+              isLoading:
+                true,
+
+              currentBoardId:
+                boardId,
+            });
+
+            const response =
+              await api.get(
+                `/boards/${resolvedBoardId}/lists`
+              );
+
+            set({
+              lists:
+                response.data,
+
+              currentBoardId:
+                boardId,
+            });
+
+            await cacheLists(
+              resolvedBoardId,
+              response.data
+            );
+
+            return response.data;
+          } catch (error) {
+            if (
+              isNetworkError(
+                error
+              )
+            ) {
+              const cached =
+                await getCachedLists(
+                  resolvedBoardId
+                );
+
+              set({
+                lists:
+                  cached,
+
+                currentBoardId:
+                  boardId,
+              });
+
+              return cached;
+            }
+
+            throw error;
+          } finally {
+            set({
+              isLoading:
+                false,
+            });
+          }
+        },
+
+      createList:
+        async (
+          boardId,
+          title
+        ) => {
+          const resolvedBoardId =
+            await resolveStoredId(
+              boardId
+            );
+
+          const data = {
+            title,
+          };
+
+          const offline =
+            await isOfflineNow();
+
+          if (!offline) {
+            try {
+              const response =
+                await api.post(
+                  `/boards/${resolvedBoardId}/lists`,
+                  data
+                );
+
+              const next = [
+                ...get().lists,
+                response.data,
+              ].sort(
+                (a, b) =>
+                  a.order -
+                  b.order
+              );
+
+              set({
+                lists:
+                  next,
+              });
+
+              await saveLists(
+                boardId,
+                next
+              );
+
+              return response.data;
+            } catch (error) {
+              if (
+                !isNetworkError(
+                  error
+                )
+              ) {
+                throw error;
+              }
+            }
+          }
+
+          const current =
+            get().lists;
+
+          const maxOrder =
+            current.length >
+            0
+              ? Math.max(
+                  ...current.map(
+                    (list) =>
+                      Number(
+                        list.order
+                      ) || 0
+                  )
+                )
+              : -1;
+
+          const tempId =
+            createTempId();
+
+          const tempList = {
+            id: tempId,
+
+            boardId,
+
+            title,
+
+            order:
+              maxOrder + 1,
+
+            _offline:
+              true,
+          };
+
+          const next = [
+            ...current,
+            tempList,
+          ].sort(
+            (a, b) =>
+              a.order -
+              b.order
+          );
+
+          set({
+            lists:
+              next,
+
+            currentBoardId:
+              boardId,
+          });
+
+          await saveLists(
+            boardId,
+            next
+          );
+
+          await queueMutation({
+            method: "post",
+
+            url:
+              `/boards/${resolvedBoardId}/lists`,
+
+            data,
+
+            entityType:
+              "list",
+
+            tempId,
+          });
+
+          return tempList;
+        },
+
+      updateList:
+        async (
+          id,
+          data
+        ) => {
+          const resolvedId =
+            await resolveStoredId(
+              id
+            );
+
+          const boardId =
+            get()
+              .currentBoardId;
+
+          const offline =
+            await isOfflineNow();
+
+          if (!offline) {
+            try {
+              const response =
+                await api.put(
+                  `/lists/${resolvedId}`,
+                  data
+                );
+
+              const next =
+                get()
+                  .lists
+                  .map(
+                    (list) =>
+                      Number(
+                        list.id
+                      ) ===
+                        Number(id) ||
+                      Number(
+                        list.id
+                      ) ===
+                        Number(
+                          resolvedId
+                        )
+                        ? response.data
+                        : list
+                  )
+                  .sort(
+                    (a, b) =>
+                      a.order -
+                      b.order
+                  );
+
+              set({
+                lists:
+                  next,
+              });
+
+              await saveLists(
+                boardId,
+                next
+              );
+
+              return response.data;
+            } catch (error) {
+              if (
+                !isNetworkError(
+                  error
+                )
+              ) {
+                throw error;
+              }
+            }
+          }
+
+          const next =
+            get()
+              .lists
+              .map(
+                (list) =>
+                  Number(
+                    list.id
+                  ) ===
+                    Number(id) ||
+                  Number(
+                    list.id
+                  ) ===
+                    Number(
+                      resolvedId
+                    )
+                    ? {
+                        ...list,
+                        ...data,
+                        _offline:
+                          true,
+                      }
+                    : list
+              )
+              .sort(
+                (a, b) =>
+                  a.order -
+                  b.order
+              );
+
+          set({
+            lists:
+              next,
+          });
+
+          await saveLists(
+            boardId,
+            next
+          );
+
+          await queueMutation({
+            method: "put",
+
+            url:
+              `/lists/${resolvedId}`,
+
+            data,
+
+            entityType:
+              "list",
+          });
+
+          return next.find(
+            (list) =>
+              Number(
+                list.id
+              ) ===
+                Number(id) ||
+              Number(
+                list.id
+              ) ===
+                Number(
+                  resolvedId
+                )
+          );
+        },
+
+      deleteList:
+        async (id) => {
+          const resolvedId =
+            await resolveStoredId(
+              id
+            );
+
+          const boardId =
+            get()
+              .currentBoardId;
+
+          const offline =
+            await isOfflineNow();
+
+          if (!offline) {
+            try {
+              await api.delete(
+                `/lists/${resolvedId}`
+              );
+
+              const next =
+                get()
+                  .lists
+                  .filter(
+                    (list) =>
+                      Number(
+                        list.id
+                      ) !==
+                        Number(id) &&
+                      Number(
+                        list.id
+                      ) !==
+                        Number(
+                          resolvedId
+                        )
+                  );
+
+              set({
+                lists:
+                  next,
+              });
+
+              await saveLists(
+                boardId,
+                next
+              );
+
+              return;
+            } catch (error) {
+              if (
+                !isNetworkError(
+                  error
+                )
+              ) {
+                throw error;
+              }
+            }
+          }
+
+          const next =
+            get()
+              .lists
+              .filter(
+                (list) =>
+                  Number(
+                    list.id
+                  ) !==
+                    Number(id) &&
+                  Number(
+                    list.id
+                  ) !==
+                    Number(
+                      resolvedId
+                    )
+              );
+
+          set({
+            lists:
+              next,
+          });
+
+          await saveLists(
+            boardId,
+            next
+          );
+
+          await queueMutation({
+            method:
+              "delete",
+
+            url:
+              `/lists/${resolvedId}`,
+
+            data: null,
+
+            entityType:
+              "list",
+          });
+        },
+
+      clearLists: () => {
+        set({
+          lists: [],
+
+          currentBoardId:
+            null,
+        });
+      },
+    })
+  );
 
 export default useListStore;

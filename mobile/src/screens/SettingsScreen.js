@@ -3,13 +3,31 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 
 import useThemeStore from "../store/themeStore";
+import useSyncStore from "../store/syncStore";
 
 import {
   useAppTheme,
 } from "../theme/theme";
+
+function formatSyncDate(
+  value
+) {
+  if (!value) {
+    return "Henüz senkronizasyon yapılmadı.";
+  }
+
+  return new Date(
+    value
+  ).toLocaleString(
+    "tr-TR"
+  );
+}
 
 export default function SettingsScreen() {
   const theme =
@@ -24,9 +42,46 @@ export default function SettingsScreen() {
         state.setTheme
     );
 
+  const isConnected =
+    useSyncStore(
+      (state) =>
+        state.isConnected
+    );
+
+  const pendingCount =
+    useSyncStore(
+      (state) =>
+        state.pendingCount
+    );
+
+  const isSyncing =
+    useSyncStore(
+      (state) =>
+        state.isSyncing
+    );
+
+  const lastSyncAt =
+    useSyncStore(
+      (state) =>
+        state.lastSyncAt
+    );
+
+  const lastError =
+    useSyncStore(
+      (state) =>
+        state.lastError
+    );
+
+  const syncPending =
+    useSyncStore(
+      (state) =>
+        state.syncPending
+    );
+
   const {
     colors,
-  } = useAppTheme();
+  } =
+    useAppTheme();
 
   const styles =
     createStyles(
@@ -50,7 +105,9 @@ export default function SettingsScreen() {
             styles.optionSelected,
         ]}
         onPress={() =>
-          setTheme(value)
+          setTheme(
+            value
+          )
         }
       >
         <View
@@ -95,10 +152,48 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleSync =
+    async () => {
+      if (
+        !isConnected
+      ) {
+        Alert.alert(
+          "Çevrimdışı",
+          "Senkronizasyon için internet bağlantısı gereklidir."
+        );
+
+        return;
+      }
+
+      await syncPending();
+
+      const state =
+        useSyncStore.getState();
+
+      if (
+        state.pendingCount ===
+        0
+      ) {
+        Alert.alert(
+          "Senkronizasyon",
+          "Bekleyen değişiklikler başarıyla senkronize edildi."
+        );
+      } else {
+        Alert.alert(
+          "Senkronizasyon",
+          state.lastError ||
+            "Bazı değişiklikler henüz senkronize edilemedi."
+        );
+      }
+    };
+
   return (
-    <View
+    <ScrollView
       style={
         styles.container
+      }
+      contentContainerStyle={
+        styles.content
       }
     >
       <Text
@@ -142,7 +237,175 @@ export default function SettingsScreen() {
       >
         Tema tercihiniz cihazda saklanır ve uygulama tekrar açıldığında korunur.
       </Text>
-    </View>
+
+      <View
+        style={
+          styles.divider
+        }
+      />
+
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        Offline ve Senkronizasyon
+      </Text>
+
+      <View
+        style={
+          styles.syncCard
+        }
+      >
+        <View
+          style={
+            styles.statusRow
+          }
+        >
+          <View
+            style={[
+              styles.statusDot,
+
+              isConnected
+                ? styles.onlineDot
+                : styles.offlineDot,
+            ]}
+          />
+
+          <View
+            style={{
+              flex: 1,
+            }}
+          >
+            <Text
+              style={
+                styles.statusTitle
+              }
+            >
+              {isConnected
+                ? "Çevrimiçi"
+                : "Çevrimdışı"}
+            </Text>
+
+            <Text
+              style={
+                styles.statusDescription
+              }
+            >
+              {isConnected
+                ? "Sunucuya gönderilmeyi bekleyen değişiklikler otomatik olarak senkronize edilir."
+                : "Değişiklikler cihazda saklanacak ve bağlantı geri geldiğinde gönderilecek."}
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={
+            styles.syncInfoRow
+          }
+        >
+          <Text
+            style={
+              styles.syncInfoLabel
+            }
+          >
+            Bekleyen değişiklik
+          </Text>
+
+          <Text
+            style={
+              styles.syncInfoValue
+            }
+          >
+            {pendingCount}
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.syncInfoRow
+          }
+        >
+          <Text
+            style={
+              styles.syncInfoLabel
+            }
+          >
+            Son senkronizasyon
+          </Text>
+
+          <Text
+            style={
+              styles.syncDate
+            }
+          >
+            {formatSyncDate(
+              lastSyncAt
+            )}
+          </Text>
+        </View>
+
+        {lastError ? (
+          <Text
+            style={
+              styles.errorText
+            }
+          >
+            {lastError}
+          </Text>
+        ) : null}
+
+        <TouchableOpacity
+          style={[
+            styles.syncButton,
+
+            (
+              !isConnected ||
+              isSyncing ||
+              pendingCount ===
+                0
+            ) &&
+              styles.disabledButton,
+          ]}
+          disabled={
+            !isConnected ||
+            isSyncing ||
+            pendingCount ===
+              0
+          }
+          onPress={
+            handleSync
+          }
+        >
+          {isSyncing ? (
+            <ActivityIndicator
+              color={
+                colors.onPrimary
+              }
+            />
+          ) : (
+            <Text
+              style={
+                styles.syncButtonText
+              }
+            >
+              {pendingCount >
+              0
+                ? "Şimdi Senkronize Et"
+                : "Senkronizasyon Tamam"}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <Text
+        style={
+          styles.offlineInfo
+        }
+      >
+        Daha önce yüklenmiş panolar, listeler, görevler ve yorumlar internet olmadan görüntülenebilir. Çevrimdışı yapılan temel değişiklikler cihazda sıraya alınır.
+      </Text>
+    </ScrollView>
   );
 }
 
@@ -155,32 +418,41 @@ function createStyles(
 
       backgroundColor:
         colors.background,
+    },
 
-      paddingHorizontal: 24,
+    content: {
+      paddingHorizontal:
+        24,
 
       paddingTop: 60,
+
+      paddingBottom: 50,
     },
 
     title: {
       fontSize: 30,
 
-      fontWeight: "700",
+      fontWeight:
+        "700",
 
       color:
         colors.text,
 
-      marginBottom: 32,
+      marginBottom:
+        32,
     },
 
     sectionTitle: {
       fontSize: 15,
 
-      fontWeight: "700",
+      fontWeight:
+        "700",
 
       color:
         colors.text,
 
-      marginBottom: 12,
+      marginBottom:
+        12,
     },
 
     option: {
@@ -200,7 +472,8 @@ function createStyles(
       backgroundColor:
         colors.card,
 
-      flexDirection: "row",
+      flexDirection:
+        "row",
 
       alignItems:
         "center",
@@ -222,7 +495,8 @@ function createStyles(
     optionTitle: {
       fontSize: 16,
 
-      fontWeight: "700",
+      fontWeight:
+        "700",
 
       color:
         colors.text,
@@ -283,6 +557,185 @@ function createStyles(
       lineHeight: 18,
 
       marginTop: 10,
+    },
+
+    divider: {
+      height: 1,
+
+      backgroundColor:
+        colors.border,
+
+      marginVertical:
+        28,
+    },
+
+    syncCard: {
+      borderWidth: 1,
+
+      borderColor:
+        colors.border,
+
+      borderRadius: 14,
+
+      backgroundColor:
+        colors.card,
+
+      padding: 16,
+    },
+
+    statusRow: {
+      flexDirection:
+        "row",
+
+      alignItems:
+        "flex-start",
+
+      marginBottom:
+        18,
+    },
+
+    statusDot: {
+      width: 12,
+
+      height: 12,
+
+      borderRadius: 6,
+
+      marginTop: 4,
+
+      marginRight: 10,
+    },
+
+    onlineDot: {
+      backgroundColor:
+        "#22c55e",
+    },
+
+    offlineDot: {
+      backgroundColor:
+        colors.danger,
+    },
+
+    statusTitle: {
+      color:
+        colors.text,
+
+      fontSize: 16,
+
+      fontWeight:
+        "700",
+    },
+
+    statusDescription: {
+      color:
+        colors.secondaryText,
+
+      fontSize: 12,
+
+      lineHeight: 18,
+
+      marginTop: 4,
+    },
+
+    syncInfoRow: {
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+
+      alignItems:
+        "center",
+
+      borderTopWidth: 1,
+
+      borderTopColor:
+        colors.border,
+
+      paddingVertical:
+        12,
+
+      gap: 12,
+    },
+
+    syncInfoLabel: {
+      color:
+        colors.secondaryText,
+
+      fontSize: 12,
+    },
+
+    syncInfoValue: {
+      color:
+        colors.text,
+
+      fontSize: 16,
+
+      fontWeight:
+        "700",
+    },
+
+    syncDate: {
+      color:
+        colors.text,
+
+      fontSize: 11,
+
+      textAlign:
+        "right",
+
+      flex: 1,
+    },
+
+    errorText: {
+      color:
+        colors.danger,
+
+      fontSize: 12,
+
+      lineHeight: 18,
+
+      marginTop: 8,
+    },
+
+    syncButton: {
+      height: 48,
+
+      backgroundColor:
+        colors.primary,
+
+      borderRadius: 10,
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      marginTop: 12,
+    },
+
+    syncButtonText: {
+      color:
+        colors.onPrimary,
+
+      fontWeight:
+        "700",
+    },
+
+    disabledButton: {
+      opacity: 0.45,
+    },
+
+    offlineInfo: {
+      color:
+        colors.secondaryText,
+
+      fontSize: 12,
+
+      lineHeight: 18,
+
+      marginTop: 12,
     },
   });
 }
