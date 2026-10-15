@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -14,6 +15,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 
 import {
@@ -39,433 +41,100 @@ import {
   useAppTheme,
 } from "../theme/theme";
 
-function ThemeSelect({
-  label,
-  value,
-  options,
-  onChange,
-  styles,
-}) {
-  const [visible, setVisible] =
-    useState(false);
-
-  const selectedOption =
-    options.find(
-      (option) =>
-        option.value === value
-    );
-
-  return (
-    <>
-      <Text
-        style={styles.filterLabel}
-      >
-        {label}
-      </Text>
-
-      <TouchableOpacity
-        style={
-          styles.selectButton
-        }
-        onPress={() =>
-          setVisible(true)
-        }
-        activeOpacity={0.8}
-      >
-        <Text
-          style={
-            styles.selectButtonText
-          }
-          numberOfLines={1}
-        >
-          {selectedOption?.label ||
-            "Seçiniz"}
-        </Text>
-
-        <Text
-          style={
-            styles.selectArrow
-          }
-        >
-          ▼
-        </Text>
-      </TouchableOpacity>
-
-      <Modal
-        visible={visible}
-        transparent
-        animationType="fade"
-        onRequestClose={() =>
-          setVisible(false)
-        }
-      >
-        <View
-          style={
-            styles.selectOverlay
-          }
-        >
-          <View
-            style={
-              styles.selectModal
-            }
-          >
-            <Text
-              style={
-                styles.selectModalTitle
-              }
-            >
-              {label}
-            </Text>
-
-            <ScrollView
-              style={
-                styles.selectOptionsContainer
-              }
-              showsVerticalScrollIndicator
-            >
-              {options.map(
-                (option) => {
-                  const selected =
-                    option.value ===
-                    value;
-
-                  return (
-                    <TouchableOpacity
-                      key={String(
-                        option.value
-                      )}
-                      style={[
-                        styles.selectOption,
-                        selected &&
-                          styles.selectOptionSelected,
-                      ]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        onChange(
-                          option.value
-                        );
-
-                        setVisible(
-                          false
-                        );
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.selectOptionText,
-                          selected &&
-                            styles.selectOptionTextSelected,
-                        ]}
-                      >
-                        {
-                          option.label
-                        }
-                      </Text>
-
-                      {selected ? (
-                        <Text
-                          style={
-                            styles.checkText
-                          }
-                        >
-                          ✓
-                        </Text>
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                }
-              )}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={
-                styles.selectCancel
-              }
-              onPress={() =>
-                setVisible(false)
-              }
-            >
-              <Text
-                style={
-                  styles.selectCancelText
-                }
-              >
-                İptal
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </>
-  );
-}
-
 function measureView(ref) {
-  return new Promise(
-    (resolve) => {
-      if (!ref) {
-        resolve(null);
-        return;
-      }
+  return new Promise((resolve) => {
+    if (!ref) {
+      resolve(null);
+      return;
+    }
 
-      ref.measureInWindow(
-        (
+    ref.measureInWindow(
+      (x, y, width, height) => {
+        resolve({
           x,
           y,
           width,
-          height
-        ) => {
-          resolve({
-            x,
-            y,
-            width,
-            height,
-          });
-        }
-      );
-    }
+          height,
+        });
+      }
+    );
+  });
+}
+
+function isInside(
+  x,
+  y,
+  measurement
+) {
+  if (!measurement) {
+    return false;
+  }
+
+  return (
+    x >= measurement.x &&
+    x <=
+      measurement.x +
+        measurement.width &&
+    y >= measurement.y &&
+    y <=
+      measurement.y +
+        measurement.height
   );
 }
 
-function DraggableTaskCard({
+function ChoiceChip({
+  label,
+  selected,
+  onPress,
+  styles,
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.choiceChip,
+        selected &&
+          styles.choiceChipSelected,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text
+        style={[
+          styles.choiceChipText,
+          selected &&
+            styles.choiceChipTextSelected,
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function TaskCard({
   task,
   listId,
   boardId,
-  taskIndex,
-  tasksByList,
-  columnRefs,
-  taskRefs,
-  moveTask,
   navigation,
+  taskRefs,
+  dragX,
+  dragY,
+  startDrag,
+  updateDrag,
+  finishDrag,
+  isDragging,
   dragEnabled,
   styles,
 }) {
-  const translateX =
-    useSharedValue(0);
-
-  const translateY =
-    useSharedValue(0);
-
-  const dragging =
+  const pressed =
     useSharedValue(false);
 
-  const handleDrop = async (
-    absoluteX,
-    absoluteY
-  ) => {
-    try {
-      const columnIds =
-        Object.keys(
-          columnRefs.current
-        );
-
-      let targetListId = null;
-
-      for (
-        const id of columnIds
-      ) {
-        const measurement =
-          await measureView(
-            columnRefs.current[
-              id
-            ]
-          );
-
-        if (!measurement) {
-          continue;
-        }
-
-        const insideX =
-          absoluteX >=
-            measurement.x &&
-          absoluteX <=
-            measurement.x +
-              measurement.width;
-
-        const insideY =
-          absoluteY >=
-            measurement.y &&
-          absoluteY <=
-            measurement.y +
-              measurement.height;
-
-        if (
-          insideX &&
-          insideY
-        ) {
-          targetListId =
-            Number(id);
-
-          break;
-        }
-      }
-
-      if (
-        targetListId === null
-      ) {
-        return;
-      }
-
-      const targetTasks =
-        tasksByList[
-          targetListId
-        ] || [];
-
-      const refs =
-        taskRefs.current[
-          targetListId
-        ] || {};
-
-      const otherTasks =
-        targetTasks.filter(
-          (item) =>
-            item.id !== task.id
-        );
-
-      let newOrder =
-        otherTasks.length;
-
-      for (
-        let index = 0;
-        index <
-        otherTasks.length;
-        index++
-      ) {
-        const targetTask =
-          otherTasks[index];
-
-        const measurement =
-          await measureView(
-            refs[
-              targetTask.id
-            ]
-          );
-
-        if (!measurement) {
-          continue;
-        }
-
-        const middle =
-          measurement.y +
-          measurement.height /
-            2;
-
-        if (
-          absoluteY < middle
-        ) {
-          newOrder = index;
-          break;
-        }
-      }
-
-      if (
-        targetListId ===
-          listId &&
-        newOrder === taskIndex
-      ) {
-        return;
-      }
-
-      await moveTask(
-        task.id,
-        listId,
-        targetListId,
-        newOrder
-      );
-    } catch (error) {
-      Alert.alert(
-        "Hata",
-        error.response?.data
-          ?.message ||
-          "Görev taşınamadı."
-      );
-    }
-  };
-
-  const gesture =
-    Gesture.Pan()
-      .activateAfterLongPress(
-        250
-      )
-      .onBegin(() => {
-        dragging.value =
-          true;
-      })
-      .onUpdate((event) => {
-        translateX.value =
-          event.translationX;
-
-        translateY.value =
-          event.translationY;
-      })
-      .onEnd((event) => {
-        runOnJS(handleDrop)(
-          event.absoluteX,
-          event.absoluteY
-        );
-
-        translateX.value =
-          withSpring(0);
-
-        translateY.value =
-          withSpring(0);
-
-        dragging.value =
-          false;
-      })
-      .onFinalize(() => {
-        translateX.value =
-          withSpring(0);
-
-        translateY.value =
-          withSpring(0);
-
-        dragging.value =
-          false;
-      });
-
-  const animatedStyle =
-    useAnimatedStyle(
-      () => ({
-        transform: [
-          {
-            translateX:
-              translateX.value,
-          },
-          {
-            translateY:
-              translateY.value,
-          },
-        ],
-
-        zIndex:
-          dragging.value
-            ? 1000
-            : 1,
-
-        elevation:
-          dragging.value
-            ? 12
-            : 0,
-
-        opacity:
-          dragging.value
-            ? 0.9
-            : 1,
-      })
-    );
-
-  const registerRef = (
-    ref
-  ) => {
+  const registerRef = (ref) => {
     if (
-      !taskRefs.current[
-        listId
-      ]
+      !taskRefs.current[listId]
     ) {
-      taskRefs.current[
-        listId
-      ] = {};
+      taskRefs.current[listId] =
+        {};
     }
 
     taskRefs.current[
@@ -473,26 +142,75 @@ function DraggableTaskCard({
     ][task.id] = ref;
   };
 
-  const getPriorityLabel =
-    () => {
-      if (
-        task.priority ===
-        "low"
-      ) {
-        return "Düşük";
-      }
+  const gesture =
+    Gesture.Pan()
+      .activateAfterLongPress(280)
 
-      if (
-        task.priority ===
-        "high"
-      ) {
-        return "Yüksek";
-      }
+      .onStart((event) => {
+        pressed.value = true;
 
-      return "Orta";
-    };
+        dragX.value =
+          event.absoluteX;
+
+        dragY.value =
+          event.absoluteY;
+
+        runOnJS(startDrag)(
+          task,
+          listId
+        );
+      })
+
+      .onUpdate((event) => {
+        dragX.value =
+          event.absoluteX;
+
+        dragY.value =
+          event.absoluteY;
+
+        runOnJS(updateDrag)(
+          event.absoluteX,
+          event.absoluteY
+        );
+      })
+
+      .onEnd((event) => {
+        runOnJS(finishDrag)(
+          task,
+          listId,
+          event.absoluteX,
+          event.absoluteY
+        );
+      })
+
+      .onFinalize(() => {
+        pressed.value = false;
+      });
+
+  const animatedStyle =
+    useAnimatedStyle(() => ({
+      transform: [
+        {
+          scale:
+            pressed.value
+              ? 0.97
+              : 1,
+        },
+      ],
+    }));
+
+  const priorityLabel =
+    task.priority === "high"
+      ? "Yüksek"
+      : task.priority === "low"
+      ? "Düşük"
+      : "Orta";
 
   const openTask = () => {
+    if (isDragging) {
+      return;
+    }
+
     navigation.navigate(
       "TaskDetail",
       {
@@ -503,62 +221,100 @@ function DraggableTaskCard({
     );
   };
 
-  const renderContent =
-    () => (
-      <>
+  const content = (
+    <>
+      <View
+        style={
+          styles.taskTopRow
+        }
+      >
         <Text
           style={
             styles.taskTitle
           }
+          numberOfLines={2}
         >
           {task.title}
         </Text>
 
-        <Text
+        {task._offline ? (
+          <View
+            style={
+              styles.offlineBadge
+            }
+          >
+            <Text
+              style={
+                styles.offlineBadgeText
+              }
+            >
+              Bekliyor
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View
+        style={
+          styles.taskMetaRow
+        }
+      >
+        <View
           style={
-            styles.taskPriority
+            styles.metaChip
           }
         >
-          Öncelik:{" "}
-          {getPriorityLabel()}
-        </Text>
+          <Text
+            style={
+              styles.metaChipText
+            }
+          >
+            {priorityLabel}
+          </Text>
+        </View>
 
         {task.dueDate ? (
-          <Text
+          <View
             style={
-              styles.taskDate
+              styles.metaChip
             }
           >
-            Son tarih:{" "}
-            {new Date(
-              task.dueDate
-            ).toLocaleDateString(
-              "tr-TR"
-            )}
-          </Text>
+            <Text
+              style={
+                styles.metaChipText
+              }
+            >
+              {new Date(
+                task.dueDate
+              ).toLocaleDateString(
+                "tr-TR"
+              )}
+            </Text>
+          </View>
         ) : null}
+      </View>
 
+      <Text
+        style={
+          styles.taskAssignee
+        }
+        numberOfLines={1}
+      >
+        {task.assignee?.name ||
+          "Atanmamış"}
+      </Text>
+
+      {dragEnabled ? (
         <Text
           style={
-            styles.taskAssignee
+            styles.dragHint
           }
         >
-          {task.assignee
-            ? `Atanan: ${task.assignee.name}`
-            : "Atanmamış"}
+          Basılı tutup sürükle
         </Text>
-
-        {dragEnabled ? (
-          <Text
-            style={
-              styles.dragHint
-            }
-          >
-            Basılı tutup sürükleyin
-          </Text>
-        ) : null}
-      </>
-    );
+      ) : null}
+    </>
+  );
 
   return (
     <View
@@ -570,20 +326,22 @@ function DraggableTaskCard({
           gesture={gesture}
         >
           <Animated.View
-            style={
-              animatedStyle
-            }
+            style={[
+              styles.taskCard,
+
+              isDragging &&
+                styles.draggingSourceCard,
+
+              animatedStyle,
+            ]}
           >
             <TouchableOpacity
-              style={
-                styles.taskCard
-              }
-              activeOpacity={0.85}
               onPress={
                 openTask
               }
+              activeOpacity={0.82}
             >
-              {renderContent()}
+              {content}
             </TouchableOpacity>
           </Animated.View>
         </GestureDetector>
@@ -592,10 +350,12 @@ function DraggableTaskCard({
           style={
             styles.taskCard
           }
-          activeOpacity={0.85}
-          onPress={openTask}
+          onPress={
+            openTask
+          }
+          activeOpacity={0.82}
         >
-          {renderContent()}
+          {content}
         </TouchableOpacity>
       )}
     </View>
@@ -609,11 +369,22 @@ export default function BoardDetailScreen({
   const { board } =
     route.params;
 
-  const { colors } =
-    useAppTheme();
+  const {
+    colors,
+  } = useAppTheme();
 
   const styles =
     createStyles(colors);
+
+  const {
+    width: screenWidth,
+  } = useWindowDimensions();
+
+  const rootRef =
+    useRef(null);
+
+  const boardScrollRef =
+    useRef(null);
 
   const columnRefs =
     useRef({});
@@ -621,10 +392,31 @@ export default function BoardDetailScreen({
   const taskRefs =
     useRef({});
 
-  const lists = useListStore(
-    (state) =>
-      state.lists
-  );
+  const trashRef =
+    useRef(null);
+
+  const boardScrollX =
+    useRef(0);
+
+  const lastAutoScroll =
+    useRef(0);
+
+  const dragX =
+    useSharedValue(-1000);
+
+  const dragY =
+    useSharedValue(-1000);
+
+  const rootX =
+    useSharedValue(0);
+
+  const rootY =
+    useSharedValue(0);
+
+  const lists =
+    useListStore(
+      (state) => state.lists
+    );
 
   const isLoading =
     useListStore(
@@ -680,6 +472,12 @@ export default function BoardDetailScreen({
         state.moveTask
     );
 
+  const deleteTask =
+    useTaskStore(
+      (state) =>
+        state.deleteTask
+    );
+
   const clearTasks =
     useTaskStore(
       (state) =>
@@ -687,118 +485,127 @@ export default function BoardDetailScreen({
     );
 
   const [
+    draggingTask,
+    setDraggingTask,
+  ] =
+    useState(null);
+
+  const [
+    hoveredListId,
+    setHoveredListId,
+  ] =
+    useState(null);
+
+  const [
+    trashHovered,
+    setTrashHovered,
+  ] =
+    useState(false);
+
+  const [
     modalVisible,
     setModalVisible,
-  ] = useState(false);
+  ] =
+    useState(false);
+
+  const [
+    filterModalVisible,
+    setFilterModalVisible,
+  ] =
+    useState(false);
 
   const [
     editingList,
     setEditingList,
-  ] = useState(null);
+  ] =
+    useState(null);
 
   const [
     title,
     setTitle,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     saving,
     setSaving,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     searchText,
     setSearchText,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     priorityFilter,
     setPriorityFilter,
-  ] = useState("all");
+  ] =
+    useState("all");
 
   const [
     assigneeFilter,
     setAssigneeFilter,
-  ] = useState("all");
+  ] =
+    useState("all");
 
   const filtersActive =
-    searchText.trim() !==
-      "" ||
-    priorityFilter !==
-      "all" ||
-    assigneeFilter !==
-      "all";
+    searchText.trim() !== "" ||
+    priorityFilter !== "all" ||
+    assigneeFilter !== "all";
 
-  const assignees = [];
+  const activeFilterCount =
+    (priorityFilter !== "all"
+      ? 1
+      : 0) +
+    (assigneeFilter !== "all"
+      ? 1
+      : 0);
 
-  Object.values(
-    tasksByList
-  ).forEach((tasks) => {
-    tasks.forEach(
-      (task) => {
-        if (
-          task.assignee &&
-          !assignees.some(
-            (user) =>
-              user.id ===
-              task.assignee.id
+  const assignees =
+    useMemo(() => {
+      const result = [];
+
+      Object.values(
+        tasksByList
+      ).forEach((tasks) => {
+        tasks.forEach(
+          (task) => {
+            if (
+              task.assignee &&
+              !result.some(
+                (user) =>
+                  Number(
+                    user.id
+                  ) ===
+                  Number(
+                    task
+                      .assignee
+                      .id
+                  )
+              )
+            ) {
+              result.push(
+                task.assignee
+              );
+            }
+          }
+        );
+      });
+
+      result.sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name,
+            "tr"
           )
-        ) {
-          assignees.push(
-            task.assignee
-          );
-        }
-      }
-    );
-  });
+      );
 
-  assignees.sort(
-    (a, b) =>
-      a.name.localeCompare(
-        b.name,
-        "tr"
-      )
-  );
-
-  const priorityOptions = [
-    {
-      label:
-        "Tüm öncelikler",
-      value: "all",
-    },
-    {
-      label: "Düşük",
-      value: "low",
-    },
-    {
-      label: "Orta",
-      value: "medium",
-    },
-    {
-      label: "Yüksek",
-      value: "high",
-    },
-  ];
-
-  const assigneeOptions = [
-    {
-      label: "Tüm kişiler",
-      value: "all",
-    },
-    {
-      label: "Atanmamış",
-      value: "unassigned",
-    },
-
-    ...assignees.map(
-      (user) => ({
-        label: user.name,
-        value: String(
-          user.id
-        ),
-      })
-    ),
-  ];
+      return result;
+    }, [
+      tasksByList,
+    ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -828,8 +635,7 @@ export default function BoardDetailScreen({
             if (active) {
               Alert.alert(
                 "Hata",
-                error.response
-                  ?.data
+                error.response?.data
                   ?.message ||
                   "Pano bilgileri yüklenemedi."
               );
@@ -850,6 +656,10 @@ export default function BoardDetailScreen({
 
         taskRefs.current =
           {};
+
+        setDraggingTask(
+          null
+        );
       };
     }, [
       board.id,
@@ -860,202 +670,689 @@ export default function BoardDetailScreen({
     ])
   );
 
-  const openCreateModal =
+  const measureRoot =
     () => {
-      setEditingList(null);
-      setTitle("");
-      setModalVisible(true);
+      if (!rootRef.current) {
+        return;
+      }
+
+      rootRef.current.measureInWindow(
+        (x, y) => {
+          rootX.value = x;
+          rootY.value = y;
+        }
+      );
     };
 
-  const openEditModal = (
-    list
-  ) => {
-    setEditingList(list);
-    setTitle(list.title);
-    setModalVisible(true);
-  };
+  const startDrag =
+    (
+      task,
+      listId
+    ) => {
+      measureRoot();
 
-  const closeModal = () => {
-    if (saving) {
-      return;
-    }
+      setDraggingTask({
+        task,
+        sourceListId:
+          listId,
+      });
 
-    setModalVisible(false);
-    setEditingList(null);
-    setTitle("");
-  };
-
-  const handleSave = async () => {
-    const cleanTitle =
-      title.trim();
-
-    if (!cleanTitle) {
-      Alert.alert(
-        "Hata",
-        "Kolon başlığı zorunludur."
+      setHoveredListId(
+        null
       );
 
-      return;
-    }
-
-    if (
-      cleanTitle.length >
-      50
-    ) {
-      Alert.alert(
-        "Hata",
-        "Kolon başlığı en fazla 50 karakter olabilir."
+      setTrashHovered(
+        false
       );
+    };
 
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      if (editingList) {
-        await updateList(
-          editingList.id,
-          {
-            title:
-              cleanTitle,
-          }
+  const findHoveredTarget =
+    async (
+      absoluteX,
+      absoluteY
+    ) => {
+      const trash =
+        await measureView(
+          trashRef.current
         );
+
+      if (
+        isInside(
+          absoluteX,
+          absoluteY,
+          trash
+        )
+      ) {
+        setTrashHovered(
+          true
+        );
+
+        setHoveredListId(
+          null
+        );
+
+        return;
+      }
+
+      setTrashHovered(
+        false
+      );
+
+      for (
+        const list of lists
+      ) {
+        const measurement =
+          await measureView(
+            columnRefs.current[
+              list.id
+            ]
+          );
+
+        if (
+          isInside(
+            absoluteX,
+            absoluteY,
+            measurement
+          )
+        ) {
+          setHoveredListId(
+            list.id
+          );
+
+          return;
+        }
+      }
+
+      setHoveredListId(
+        null
+      );
+    };
+
+  const handleAutoScroll =
+    (
+      absoluteX
+    ) => {
+      if (
+        !draggingTask
+      ) {
+        return;
+      }
+
+      const now =
+        Date.now();
+
+      if (
+        now -
+          lastAutoScroll.current <
+        90
+      ) {
+        return;
+      }
+
+      const edgeSize =
+        70;
+
+      let nextX =
+        boardScrollX.current;
+
+      if (
+        absoluteX >
+        screenWidth -
+          edgeSize
+      ) {
+        nextX += 70;
+      } else if (
+        absoluteX <
+        edgeSize
+      ) {
+        nextX -= 70;
       } else {
-        await createList(
-          board.id,
-          cleanTitle
+        return;
+      }
+
+      nextX =
+        Math.max(
+          0,
+          nextX
         );
+
+      boardScrollX.current =
+        nextX;
+
+      boardScrollRef.current?.scrollTo(
+        {
+          x: nextX,
+          animated:
+            true,
+        }
+      );
+
+      lastAutoScroll.current =
+        now;
+    };
+
+  const updateDrag =
+    (
+      absoluteX,
+      absoluteY
+    ) => {
+      handleAutoScroll(
+        absoluteX
+      );
+
+      findHoveredTarget(
+        absoluteX,
+        absoluteY
+      );
+    };
+
+  const calculateDropOrder =
+    async (
+      targetListId,
+      draggedTaskId,
+      absoluteY
+    ) => {
+      const targetTasks =
+        tasksByList[
+          targetListId
+        ] || [];
+
+      const filtered =
+        targetTasks.filter(
+          (item) =>
+            Number(
+              item.id
+            ) !==
+            Number(
+              draggedTaskId
+            )
+        );
+
+      let newOrder =
+        filtered.length;
+
+      const refs =
+        taskRefs.current[
+          targetListId
+        ] || {};
+
+      for (
+        let index = 0;
+        index <
+        filtered.length;
+        index++
+      ) {
+        const task =
+          filtered[index];
+
+        const measurement =
+          await measureView(
+            refs[task.id]
+          );
+
+        if (!measurement) {
+          continue;
+        }
+
+        const middle =
+          measurement.y +
+          measurement.height /
+            2;
+
+        if (
+          absoluteY <
+          middle
+        ) {
+          newOrder =
+            index;
+
+          break;
+        }
+      }
+
+      return newOrder;
+    };
+
+  const confirmTaskDelete =
+    (
+      task,
+      listId
+    ) => {
+      Alert.alert(
+        "Görevi Sil",
+        `"${task.title}" görevini silmek istediğinize emin misiniz?`,
+        [
+          {
+            text: "İptal",
+            style: "cancel",
+          },
+
+          {
+            text: "Sil",
+            style:
+              "destructive",
+
+            onPress:
+              async () => {
+                try {
+                  await deleteTask(
+                    task.id,
+                    listId
+                  );
+                } catch (
+                  error
+                ) {
+                  Alert.alert(
+                    "Hata",
+                    error.response
+                      ?.data
+                      ?.message ||
+                      "Görev silinemedi."
+                  );
+                }
+              },
+          },
+        ]
+      );
+    };
+
+  const finishDrag =
+    async (
+      task,
+      sourceListId,
+      absoluteX,
+      absoluteY
+    ) => {
+      try {
+        const trash =
+          await measureView(
+            trashRef.current
+          );
+
+        if (
+          isInside(
+            absoluteX,
+            absoluteY,
+            trash
+          )
+        ) {
+          setDraggingTask(
+            null
+          );
+
+          setTrashHovered(
+            false
+          );
+
+          setHoveredListId(
+            null
+          );
+
+          confirmTaskDelete(
+            task,
+            sourceListId
+          );
+
+          return;
+        }
+
+        let targetListId =
+          null;
+
+        for (
+          const list of lists
+        ) {
+          const measurement =
+            await measureView(
+              columnRefs.current[
+                list.id
+              ]
+            );
+
+          if (
+            isInside(
+              absoluteX,
+              absoluteY,
+              measurement
+            )
+          ) {
+            targetListId =
+              list.id;
+
+            break;
+          }
+        }
+
+        if (
+          targetListId ===
+          null
+        ) {
+          return;
+        }
+
+        const newOrder =
+          await calculateDropOrder(
+            targetListId,
+            task.id,
+            absoluteY
+          );
+
+        const sourceTasks =
+          tasksByList[
+            sourceListId
+          ] || [];
+
+        const oldIndex =
+          sourceTasks.findIndex(
+            (item) =>
+              Number(
+                item.id
+              ) ===
+              Number(
+                task.id
+              )
+          );
+
+        if (
+          Number(
+            targetListId
+          ) ===
+            Number(
+              sourceListId
+            ) &&
+          newOrder ===
+            oldIndex
+        ) {
+          return;
+        }
+
+        await moveTask(
+          task.id,
+          sourceListId,
+          targetListId,
+          newOrder
+        );
+      } catch (error) {
+        Alert.alert(
+          "Hata",
+          error.response?.data
+            ?.message ||
+            "Görev taşınamadı."
+        );
+      } finally {
+        setDraggingTask(
+          null
+        );
+
+        setHoveredListId(
+          null
+        );
+
+        setTrashHovered(
+          false
+        );
+
+        dragX.value =
+          -1000;
+
+        dragY.value =
+          -1000;
+      }
+    };
+
+  const ghostStyle =
+    useAnimatedStyle(
+      () => ({
+        transform: [
+          {
+            translateX:
+              dragX.value -
+              rootX.value -
+              125,
+          },
+
+          {
+            translateY:
+              dragY.value -
+              rootY.value -
+              65,
+          },
+
+          {
+            scale:
+              withSpring(
+                draggingTask
+                  ? 1.04
+                  : 1
+              ),
+          },
+        ],
+      }),
+      [
+        draggingTask,
+      ]
+    );
+
+  const openCreateModal =
+    () => {
+      setEditingList(
+        null
+      );
+
+      setTitle("");
+
+      setModalVisible(
+        true
+      );
+    };
+
+  const openEditModal =
+    (list) => {
+      setEditingList(
+        list
+      );
+
+      setTitle(
+        list.title
+      );
+
+      setModalVisible(
+        true
+      );
+    };
+
+  const closeModal =
+    () => {
+      if (saving) {
+        return;
       }
 
       setModalVisible(
         false
       );
 
-      setEditingList(null);
-      setTitle("");
-    } catch (error) {
-      Alert.alert(
-        "Hata",
-        error.response?.data
-          ?.message ||
-          "İşlem sırasında bir hata oluştu."
+      setEditingList(
+        null
       );
-    } finally {
-      setSaving(false);
-    }
-  };
 
-  const handleDelete = (
-    list
-  ) => {
-    Alert.alert(
-      "Kolonu Sil",
-      `"${list.title}" kolonunu silmek istediğinize emin misiniz? Bu kolondaki görevler de silinecektir.`,
-      [
-        {
-          text: "İptal",
-          style: "cancel",
-        },
+      setTitle("");
+    };
 
-        {
-          text: "Sil",
-          style: "destructive",
+  const handleSave =
+    async () => {
+      const cleanTitle =
+        title.trim();
 
-          onPress:
-            async () => {
-              try {
-                await deleteList(
-                  list.id
-                );
-              } catch (
-                error
-              ) {
-                Alert.alert(
-                  "Hata",
-                  error.response
-                    ?.data
-                    ?.message ||
-                    "Kolon silinemedi."
-                );
-              }
-            },
-        },
-      ]
-    );
-  };
-
-  const filterTasks = (
-    tasks
-  ) => {
-    const cleanSearch =
-      searchText
-        .trim()
-        .toLocaleLowerCase(
-          "tr-TR"
+      if (!cleanTitle) {
+        Alert.alert(
+          "Hata",
+          "Kolon başlığı zorunludur."
         );
 
-    return tasks.filter(
-      (task) => {
-        const taskTitle =
-          task.title || "";
+        return;
+      }
 
-        const taskDescription =
-          task.description ||
-          "";
+      if (
+        cleanTitle.length >
+        50
+      ) {
+        Alert.alert(
+          "Hata",
+          "Kolon başlığı en fazla 50 karakter olabilir."
+        );
 
-        const matchesSearch =
-          cleanSearch ===
-            "" ||
-          taskTitle
-            .toLocaleLowerCase(
-              "tr-TR"
-            )
-            .includes(
-              cleanSearch
-            ) ||
-          taskDescription
-            .toLocaleLowerCase(
-              "tr-TR"
-            )
-            .includes(
-              cleanSearch
-            );
+        return;
+      }
 
-        const matchesPriority =
-          priorityFilter ===
-            "all" ||
-          task.priority ===
-            priorityFilter;
-
-        let matchesAssignee =
-          true;
+      try {
+        setSaving(
+          true
+        );
 
         if (
-          assigneeFilter ===
-          "unassigned"
+          editingList
         ) {
-          matchesAssignee =
-            !task.assigneeId;
-        } else if (
-          assigneeFilter !==
-          "all"
-        ) {
-          matchesAssignee =
-            task.assigneeId ===
-            Number(
-              assigneeFilter
-            );
+          await updateList(
+            editingList.id,
+            {
+              title:
+                cleanTitle,
+            }
+          );
+        } else {
+          await createList(
+            board.id,
+            cleanTitle
+          );
         }
 
-        return (
-          matchesSearch &&
-          matchesPriority &&
-          matchesAssignee
+        setModalVisible(
+          false
+        );
+
+        setEditingList(
+          null
+        );
+
+        setTitle("");
+      } catch (error) {
+        Alert.alert(
+          "Hata",
+          error.response?.data
+            ?.message ||
+            "İşlem başarısız."
+        );
+      } finally {
+        setSaving(
+          false
         );
       }
-    );
-  };
+    };
+
+  const handleDeleteList =
+    (list) => {
+      Alert.alert(
+        "Kolonu Sil",
+        `"${list.title}" kolonunu ve içindeki görevleri silmek istediğinize emin misiniz?`,
+        [
+          {
+            text: "İptal",
+            style: "cancel",
+          },
+
+          {
+            text: "Sil",
+            style:
+              "destructive",
+
+            onPress:
+              async () => {
+                try {
+                  await deleteList(
+                    list.id
+                  );
+                } catch (
+                  error
+                ) {
+                  Alert.alert(
+                    "Hata",
+                    error.response
+                      ?.data
+                      ?.message ||
+                      "Kolon silinemedi."
+                  );
+                }
+              },
+          },
+        ]
+      );
+    };
+
+  const filterTasks =
+    (tasks) => {
+      const cleanSearch =
+        searchText
+          .trim()
+          .toLocaleLowerCase(
+            "tr-TR"
+          );
+
+      return tasks.filter(
+        (task) => {
+          const searchable =
+            `${
+              task.title || ""
+            } ${
+              task.description ||
+              ""
+            }`
+              .toLocaleLowerCase(
+                "tr-TR"
+              );
+
+          const searchMatch =
+            cleanSearch ===
+              "" ||
+            searchable.includes(
+              cleanSearch
+            );
+
+          const priorityMatch =
+            priorityFilter ===
+              "all" ||
+            task.priority ===
+              priorityFilter;
+
+          let assigneeMatch =
+            true;
+
+          if (
+            assigneeFilter ===
+            "unassigned"
+          ) {
+            assigneeMatch =
+              !task.assigneeId;
+          } else if (
+            assigneeFilter !==
+            "all"
+          ) {
+            assigneeMatch =
+              Number(
+                task.assigneeId
+              ) ===
+              Number(
+                assigneeFilter
+              );
+          }
+
+          return (
+            searchMatch &&
+            priorityMatch &&
+            assigneeMatch
+          );
+        }
+      );
+    };
 
   const clearFilters =
     () => {
@@ -1072,83 +1369,119 @@ export default function BoardDetailScreen({
 
   return (
     <View
-      style={styles.container}
+      ref={rootRef}
+      collapsable={false}
+      onLayout={
+        measureRoot
+      }
+      style={
+        styles.container
+      }
     >
       <View
-        style={styles.header}
+        style={
+          styles.header
+        }
       >
-        <TouchableOpacity
-          onPress={() =>
-            navigation.goBack()
-          }
-        >
-          <Text
-            style={styles.back}
-          >
-            ‹ Geri
-          </Text>
-        </TouchableOpacity>
-
-        <Text
+        <View
           style={
-            styles.boardTitle
+            styles.titleRow
           }
         >
-          {board.title}
-        </Text>
-
-        {board.description ? (
-          <Text
+          <TouchableOpacity
             style={
-              styles.boardDescription
+              styles.backButton
+            }
+            onPress={() =>
+              navigation.goBack()
             }
           >
-            {board.description}
-          </Text>
-        ) : null}
-
-        <TouchableOpacity
-          style={
-            styles.addButton
-          }
-          onPress={
-            openCreateModal
-          }
-        >
-          <Text
-            style={
-              styles.addButtonText
-            }
-          >
-            + Kolon Ekle
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={
-            styles.membersButton
-          }
-          onPress={() =>
-            navigation.navigate(
-              "BoardMembers",
-              {
-                board,
+            <Text
+              style={
+                styles.backText
               }
-            )
-          }
-        >
-          <Text
+            >
+              ‹
+            </Text>
+          </TouchableOpacity>
+
+          <View
             style={
-              styles.membersButtonText
+              styles.titleArea
             }
           >
-            Pano Üyeleri
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={
+                styles.boardTitle
+              }
+              numberOfLines={1}
+            >
+              {board.title}
+            </Text>
+
+            {board.description ? (
+              <Text
+                style={
+                  styles.boardDescription
+                }
+                numberOfLines={1}
+              >
+                {
+                  board.description
+                }
+              </Text>
+            ) : null}
+          </View>
+        </View>
 
         <View
           style={
-            styles.filterPanel
+            styles.actionRow
+          }
+        >
+          <TouchableOpacity
+            style={
+              styles.primaryAction
+            }
+            onPress={
+              openCreateModal
+            }
+          >
+            <Text
+              style={
+                styles.primaryActionText
+              }
+            >
+              + Kolon
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={
+              styles.secondaryAction
+            }
+            onPress={() =>
+              navigation.navigate(
+                "BoardMembers",
+                {
+                  board,
+                }
+              )
+            }
+          >
+            <Text
+              style={
+                styles.secondaryActionText
+              }
+            >
+              Üyeler
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={
+            styles.searchRow
           }
         >
           <TextInput
@@ -1159,227 +1492,283 @@ export default function BoardDetailScreen({
             placeholderTextColor={
               colors.secondaryText
             }
-            value={searchText}
+            value={
+              searchText
+            }
             onChangeText={
               setSearchText
             }
           />
 
-          <ThemeSelect
-            label="Öncelik"
-            value={
-              priorityFilter
-            }
-            options={
-              priorityOptions
-            }
-            onChange={
-              setPriorityFilter
-            }
-            styles={styles}
-          />
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
 
-          <ThemeSelect
-            label="Atanan Kişi"
-            value={
-              assigneeFilter
+              activeFilterCount >
+                0 &&
+                styles.filterButtonActive,
+            ]}
+            onPress={() =>
+              setFilterModalVisible(
+                true
+              )
             }
-            options={
-              assigneeOptions
-            }
-            onChange={
-              setAssigneeFilter
-            }
-            styles={styles}
-          />
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
 
-          {filtersActive ? (
-            <>
-              <TouchableOpacity
-                style={
-                  styles.clearFilterButton
-                }
-                onPress={
-                  clearFilters
-                }
-              >
-                <Text
-                  style={
-                    styles.clearFilterText
-                  }
-                >
-                  Filtreleri Temizle
-                </Text>
-              </TouchableOpacity>
+                activeFilterCount >
+                  0 &&
+                  styles.filterButtonTextActive,
+              ]}
+            >
+              Filtre
+              {activeFilterCount >
+              0
+                ? ` ${activeFilterCount}`
+                : ""}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
+        {filtersActive ? (
+          <View
+            style={
+              styles.filterStatus
+            }
+          >
+            <Text
+              style={
+                styles.filterStatusText
+              }
+            >
+              Filtre aktif · sürükle bırak kapalı
+            </Text>
+
+            <TouchableOpacity
+              onPress={
+                clearFilters
+              }
+            >
               <Text
                 style={
-                  styles.dragDisabledText
+                  styles.clearText
                 }
               >
-                Arama veya filtre açıkken görev taşıma devre dışıdır.
+                Temizle
               </Text>
-            </>
-          ) : null}
-        </View>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text
+            style={
+              styles.dragInfo
+            }
+          >
+            Göreve basılı tutup istediğin kolona sürükleyebilirsin.
+          </Text>
+        )}
       </View>
 
       {isLoading &&
-      lists.length === 0 ? (
-        <ActivityIndicator
-          size="large"
-          color={colors.text}
-          style={styles.loading}
-        />
+      lists.length ===
+        0 ? (
+        <View
+          style={
+            styles.center
+          }
+        >
+          <ActivityIndicator
+            size="large"
+            color={
+              colors.text
+            }
+          />
+        </View>
       ) : lists.length ===
         0 ? (
         <View
-          style={styles.empty}
+          style={
+            styles.center
+          }
         >
           <Text
             style={
               styles.emptyTitle
             }
           >
-            Henüz kolon bulunmuyor.
-          </Text>
-
-          <Text
-            style={
-              styles.emptyText
-            }
-          >
-            İlk kolonunuzu oluşturabilirsiniz.
+            Henüz kolon yok
           </Text>
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={
-            false
+        <View
+          style={
+            styles.boardArea
           }
-          contentContainerStyle={
-            styles.board
-          }
-          keyboardShouldPersistTaps="handled"
         >
-          {lists.map(
-            (list) => {
-              const listTasks =
-                tasksByList[
-                  list.id
-                ] || [];
+          <ScrollView
+            ref={
+              boardScrollRef
+            }
+            horizontal
+            scrollEnabled={
+              !draggingTask
+            }
+            showsHorizontalScrollIndicator={
+              false
+            }
+            onScroll={(
+              event
+            ) => {
+              boardScrollX.current =
+                event.nativeEvent
+                  .contentOffset.x;
+            }}
+            scrollEventThrottle={
+              16
+            }
+            contentContainerStyle={
+              styles.boardContent
+            }
+          >
+            {lists.map(
+              (list) => {
+                const listTasks =
+                  tasksByList[
+                    list.id
+                  ] || [];
 
-              const visibleTasks =
-                filterTasks(
-                  listTasks
-                );
+                const visibleTasks =
+                  filterTasks(
+                    listTasks
+                  );
 
-              return (
-                <View
-                  key={list.id}
-                  ref={(ref) => {
-                    columnRefs.current[
+                const isHovered =
+                  Number(
+                    hoveredListId
+                  ) ===
+                  Number(
+                    list.id
+                  );
+
+                return (
+                  <View
+                    key={
                       list.id
-                    ] = ref;
-                  }}
-                  collapsable={
-                    false
-                  }
-                  style={
-                    styles.column
-                  }
-                >
-                  <View
-                    style={
-                      styles.columnHeader
                     }
+                    ref={(
+                      ref
+                    ) => {
+                      columnRefs.current[
+                        list.id
+                      ] =
+                        ref;
+                    }}
+                    collapsable={
+                      false
+                    }
+                    style={[
+                      styles.column,
+
+                      isHovered &&
+                        styles.columnHovered,
+                    ]}
                   >
                     <View
                       style={
-                        styles.columnTitleRow
+                        styles.columnHeader
                       }
                     >
-                      <Text
+                      <View
                         style={
-                          styles.columnTitle
-                        }
-                      >
-                        {list.title}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.taskCount
-                        }
-                      >
-                        {
-                          visibleTasks.length
-                        }
-                        /
-                        {
-                          listTasks.length
-                        }
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.columnActions
-                      }
-                    >
-                      <TouchableOpacity
-                        onPress={() =>
-                          openEditModal(
-                            list
-                          )
+                          styles.columnTitleRow
                         }
                       >
                         <Text
                           style={
-                            styles.edit
+                            styles.columnTitle
+                          }
+                          numberOfLines={
+                            1
                           }
                         >
-                          Düzenle
+                          {
+                            list.title
+                          }
                         </Text>
-                      </TouchableOpacity>
 
-                      <TouchableOpacity
-                        onPress={() =>
-                          handleDelete(
-                            list
-                          )
+                        <View
+                          style={
+                            styles.countBadge
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.countText
+                            }
+                          >
+                            {
+                              visibleTasks.length
+                            }
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={
+                          styles.columnActions
                         }
                       >
-                        <Text
-                          style={
-                            styles.delete
+                        <TouchableOpacity
+                          onPress={() =>
+                            openEditModal(
+                              list
+                            )
                           }
                         >
-                          Sil
-                        </Text>
-                      </TouchableOpacity>
+                          <Text
+                            style={
+                              styles.columnEdit
+                            }
+                          >
+                            Düzenle
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() =>
+                            handleDeleteList(
+                              list
+                            )
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.columnDelete
+                            }
+                          >
+                            Sil
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
 
-                  <View
-                    style={
-                      styles.taskArea
-                    }
-                  >
-                    {visibleTasks.map(
-                      (task) => {
-                        const realIndex =
-                          listTasks.findIndex(
-                            (
-                              item
-                            ) =>
-                              item.id ===
-                              task.id
-                          );
-
-                        return (
-                          <DraggableTaskCard
+                    <ScrollView
+                      style={
+                        styles.taskScroll
+                      }
+                      nestedScrollEnabled
+                      scrollEnabled={
+                        !draggingTask
+                      }
+                      showsVerticalScrollIndicator={
+                        false
+                      }
+                    >
+                      {visibleTasks.map(
+                        (task) => (
+                          <TaskCard
                             key={
                               task.id
                             }
@@ -1392,23 +1781,36 @@ export default function BoardDetailScreen({
                             boardId={
                               board.id
                             }
-                            taskIndex={
-                              realIndex
-                            }
-                            tasksByList={
-                              tasksByList
-                            }
-                            columnRefs={
-                              columnRefs
+                            navigation={
+                              navigation
                             }
                             taskRefs={
                               taskRefs
                             }
-                            moveTask={
-                              moveTask
+                            dragX={
+                              dragX
                             }
-                            navigation={
-                              navigation
+                            dragY={
+                              dragY
+                            }
+                            startDrag={
+                              startDrag
+                            }
+                            updateDrag={
+                              updateDrag
+                            }
+                            finishDrag={
+                              finishDrag
+                            }
+                            isDragging={
+                              Number(
+                                draggingTask
+                                  ?.task
+                                  ?.id
+                              ) ===
+                              Number(
+                                task.id
+                              )
                             }
                             dragEnabled={
                               !filtersActive
@@ -1417,22 +1819,28 @@ export default function BoardDetailScreen({
                               styles
                             }
                           />
-                        );
-                      }
-                    )}
+                        )
+                      )}
 
-                    {visibleTasks.length ===
-                    0 ? (
-                      <Text
-                        style={
-                          styles.noTask
-                        }
-                      >
-                        {filtersActive
-                          ? "Filtrelere uygun görev bulunamadı."
-                          : "Henüz görev yok."}
-                      </Text>
-                    ) : null}
+                      {visibleTasks.length ===
+                      0 ? (
+                        <View
+                          style={
+                            styles.noTask
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.noTaskText
+                            }
+                          >
+                            {filtersActive
+                              ? "Eşleşen görev yok."
+                              : "Henüz görev yok."}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </ScrollView>
 
                     <TouchableOpacity
                       style={
@@ -1444,6 +1852,7 @@ export default function BoardDetailScreen({
                           {
                             listId:
                               list.id,
+
                             boardId:
                               board.id,
                           }
@@ -1459,15 +1868,322 @@ export default function BoardDetailScreen({
                       </Text>
                     </TouchableOpacity>
                   </View>
-                </View>
-              );
-            }
-          )}
-        </ScrollView>
+                );
+              }
+            )}
+          </ScrollView>
+        </View>
       )}
 
+      {draggingTask ? (
+        <>
+          <View
+            pointerEvents="none"
+            style={
+              styles.dragBanner
+            }
+          >
+            <Text
+              style={
+                styles.dragBannerText
+              }
+            >
+              Kolonun üzerine bırak · silmek için çöpe sürükle
+            </Text>
+          </View>
+
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.dragGhost,
+              ghostStyle,
+            ]}
+          >
+            <Text
+              style={
+                styles.dragGhostTitle
+              }
+              numberOfLines={2}
+            >
+              {
+                draggingTask
+                  .task.title
+              }
+            </Text>
+
+            <Text
+              style={
+                styles.dragGhostMeta
+              }
+            >
+              {draggingTask
+                  .task
+                  .assignee
+                  ?.name ||
+                "Atanmamış"}
+            </Text>
+          </Animated.View>
+
+          <View
+            pointerEvents="none"
+            style={
+              styles.trashWrapper
+            }
+          >
+            <View
+              ref={
+                trashRef
+              }
+              collapsable={
+                false
+              }
+              style={[
+                styles.trashZone,
+
+                trashHovered &&
+                  styles.trashZoneHovered,
+              ]}
+            >
+              <Text
+                style={
+                  styles.trashIcon
+                }
+              >
+                🗑
+              </Text>
+
+              <Text
+                style={
+                  styles.trashText
+                }
+              >
+                Görevi Sil
+              </Text>
+            </View>
+          </View>
+        </>
+      ) : null}
+
       <Modal
-        visible={modalVisible}
+        visible={
+          filterModalVisible
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setFilterModalVisible(
+            false
+          )
+        }
+      >
+        <View
+          style={
+            styles.filterOverlay
+          }
+        >
+          <View
+            style={
+              styles.filterSheet
+            }
+          >
+            <Text
+              style={
+                styles.sheetTitle
+              }
+            >
+              Filtreler
+            </Text>
+
+            <Text
+              style={
+                styles.filterSectionTitle
+              }
+            >
+              Öncelik
+            </Text>
+
+            <View
+              style={
+                styles.chips
+              }
+            >
+              {[
+                [
+                  "all",
+                  "Tümü",
+                ],
+                [
+                  "low",
+                  "Düşük",
+                ],
+                [
+                  "medium",
+                  "Orta",
+                ],
+                [
+                  "high",
+                  "Yüksek",
+                ],
+              ].map(
+                ([
+                  value,
+                  label,
+                ]) => (
+                  <ChoiceChip
+                    key={
+                      value
+                    }
+                    label={
+                      label
+                    }
+                    selected={
+                      priorityFilter ===
+                      value
+                    }
+                    onPress={() =>
+                      setPriorityFilter(
+                        value
+                      )
+                    }
+                    styles={
+                      styles
+                    }
+                  />
+                )
+              )}
+            </View>
+
+            <Text
+              style={
+                styles.filterSectionTitle
+              }
+            >
+              Atanan Kişi
+            </Text>
+
+            <ScrollView
+              style={{
+                maxHeight:
+                  220,
+              }}
+            >
+              <View
+                style={
+                  styles.chips
+                }
+              >
+                <ChoiceChip
+                  label="Tümü"
+                  selected={
+                    assigneeFilter ===
+                    "all"
+                  }
+                  onPress={() =>
+                    setAssigneeFilter(
+                      "all"
+                    )
+                  }
+                  styles={
+                    styles
+                  }
+                />
+
+                <ChoiceChip
+                  label="Atanmamış"
+                  selected={
+                    assigneeFilter ===
+                    "unassigned"
+                  }
+                  onPress={() =>
+                    setAssigneeFilter(
+                      "unassigned"
+                    )
+                  }
+                  styles={
+                    styles
+                  }
+                />
+
+                {assignees.map(
+                  (user) => (
+                    <ChoiceChip
+                      key={
+                        user.id
+                      }
+                      label={
+                        user.name
+                      }
+                      selected={
+                        assigneeFilter ===
+                        String(
+                          user.id
+                        )
+                      }
+                      onPress={() =>
+                        setAssigneeFilter(
+                          String(
+                            user.id
+                          )
+                        )
+                      }
+                      styles={
+                        styles
+                      }
+                    />
+                  )
+                )}
+              </View>
+            </ScrollView>
+
+            <View
+              style={
+                styles.filterFooter
+              }
+            >
+              <TouchableOpacity
+                style={
+                  styles.resetButton
+                }
+                onPress={
+                  clearFilters
+                }
+              >
+                <Text
+                  style={
+                    styles.resetText
+                  }
+                >
+                  Temizle
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={
+                  styles.applyButton
+                }
+                onPress={() =>
+                  setFilterModalVisible(
+                    false
+                  )
+                }
+              >
+                <Text
+                  style={
+                    styles.applyText
+                  }
+                >
+                  Uygula
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={
+          modalVisible
+        }
         transparent
         animationType="fade"
         onRequestClose={
@@ -1480,7 +2196,9 @@ export default function BoardDetailScreen({
           }
         >
           <View
-            style={styles.modal}
+            style={
+              styles.modal
+            }
           >
             <Text
               style={
@@ -1496,26 +2214,18 @@ export default function BoardDetailScreen({
               style={
                 styles.input
               }
+              value={
+                title
+              }
+              onChangeText={
+                setTitle
+              }
               placeholder="Kolon başlığı"
               placeholderTextColor={
                 colors.secondaryText
               }
-              value={title}
-              onChangeText={
-                setTitle
-              }
               maxLength={50}
-              autoFocus
-              editable={!saving}
             />
-
-            <Text
-              style={
-                styles.counter
-              }
-            >
-              {title.length}/50
-            </Text>
 
             <View
               style={
@@ -1529,7 +2239,6 @@ export default function BoardDetailScreen({
                 onPress={
                   closeModal
                 }
-                disabled={saving}
               >
                 <Text
                   style={
@@ -1547,7 +2256,6 @@ export default function BoardDetailScreen({
                 onPress={
                   handleSave
                 }
-                disabled={saving}
               >
                 {saving ? (
                   <ActivityIndicator
@@ -1573,7 +2281,9 @@ export default function BoardDetailScreen({
   );
 }
 
-function createStyles(colors) {
+function createStyles(
+  colors
+) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -1582,46 +2292,114 @@ function createStyles(colors) {
     },
 
     header: {
-      paddingTop: 56,
-      paddingHorizontal: 20,
+      paddingTop: 48,
+      paddingHorizontal: 16,
+      paddingBottom: 8,
     },
 
-    back: {
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    backButton: {
+      width: 42,
+      height: 42,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      borderRadius: 12,
+      backgroundColor:
+        colors.card,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+
+    backText: {
       color: colors.text,
-      fontSize: 16,
-      marginBottom: 16,
+      fontSize: 30,
+      lineHeight: 30,
+    },
+
+    titleArea: {
+      flex: 1,
     },
 
     boardTitle: {
       color: colors.text,
-      fontSize: 28,
+      fontSize: 25,
       fontWeight: "700",
     },
 
     boardDescription: {
       color:
         colors.secondaryText,
-      marginTop: 6,
-      fontSize: 14,
+      fontSize: 12,
+      marginTop: 2,
     },
 
-    addButton: {
-      height: 46,
+    actionRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 14,
+    },
+
+    primaryAction: {
+      flex: 1,
+      height: 43,
       backgroundColor:
         colors.primary,
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      marginTop: 20,
     },
 
-    addButtonText: {
+    primaryActionText: {
       color:
         colors.onPrimary,
-      fontWeight: "600",
+      fontWeight: "700",
     },
 
-    membersButton: {
+    secondaryAction: {
+      flex: 1,
+      height: 43,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      backgroundColor:
+        colors.card,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    secondaryActionText: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+
+    searchRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 10,
+    },
+
+    searchInput: {
+      flex: 1,
+      height: 44,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      backgroundColor:
+        colors.input,
+      color: colors.text,
+      borderRadius: 10,
+      paddingHorizontal: 13,
+    },
+
+    filterButton: {
+      minWidth: 78,
       height: 44,
       borderWidth: 1,
       borderColor:
@@ -1631,328 +2409,477 @@ function createStyles(colors) {
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      marginTop: 10,
     },
 
-    membersButtonText: {
-      color: colors.text,
-      fontWeight: "600",
-    },
-
-    filterPanel: {
-      marginTop: 18,
-      marginBottom: 4,
-    },
-
-    searchInput: {
-      minHeight: 48,
-      borderWidth: 1,
-      borderColor:
-        colors.border,
-      borderRadius: 10,
-      paddingHorizontal: 14,
+    filterButtonActive: {
       backgroundColor:
-        colors.input,
-      color: colors.text,
-      marginBottom: 12,
-    },
-
-    filterLabel: {
-      color: colors.text,
-      fontSize: 12,
-      fontWeight: "600",
-      marginBottom: 6,
-    },
-
-    selectButton: {
-      minHeight: 50,
-      borderWidth: 1,
+        colors.primary,
       borderColor:
-        colors.border,
-      backgroundColor:
-        colors.input,
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      marginBottom: 12,
+        colors.primary,
+    },
+
+    filterButtonText: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+
+    filterButtonTextActive: {
+      color:
+        colors.onPrimary,
+    },
+
+    filterStatus: {
       flexDirection: "row",
-      alignItems: "center",
       justifyContent:
         "space-between",
+      marginTop: 6,
     },
 
-    selectButtonText: {
-      flex: 1,
-      color: colors.text,
-      fontSize: 14,
-      paddingRight: 12,
-    },
-
-    selectArrow: {
+    filterStatusText: {
       color:
         colors.secondaryText,
-      fontSize: 11,
+      fontSize: 10,
     },
 
-    selectOverlay: {
+    clearText: {
+      color: colors.text,
+      fontSize: 10,
+      fontWeight: "700",
+    },
+
+    dragInfo: {
+      color:
+        colors.secondaryText,
+      fontSize: 10,
+      marginTop: 6,
+    },
+
+    boardArea: {
       flex: 1,
-      backgroundColor:
-        colors.overlay,
-      justifyContent: "center",
-      padding: 24,
+      minHeight: 0,
     },
 
-    selectModal: {
-      maxHeight: "75%",
+    boardContent: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      gap: 12,
+      alignItems: "stretch",
+    },
+
+    column: {
+      width: 286,
+      alignSelf: "stretch",
       backgroundColor:
-        colors.card,
+        colors.surface,
       borderWidth: 1,
       borderColor:
         colors.border,
       borderRadius: 14,
-      padding: 18,
+      padding: 12,
     },
 
-    selectModalTitle: {
-      color: colors.text,
-      fontSize: 20,
-      fontWeight: "700",
-      marginBottom: 14,
-    },
-
-    selectOptionsContainer: {
-      flexGrow: 0,
-    },
-
-    selectOption: {
-      minHeight: 52,
-      borderBottomWidth: 1,
-      borderBottomColor:
-        colors.border,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
-      paddingHorizontal: 8,
-    },
-
-    selectOptionSelected: {
-      backgroundColor:
-        colors.surface,
-    },
-
-    selectOptionText: {
-      flex: 1,
-      color: colors.text,
-      fontSize: 15,
-      paddingRight: 12,
-    },
-
-    selectOptionTextSelected: {
-      fontWeight: "700",
-    },
-
-    checkText: {
-      color: colors.text,
-      fontSize: 18,
-      fontWeight: "700",
-    },
-
-    selectCancel: {
-      height: 46,
-      marginTop: 14,
-      borderWidth: 1,
+    columnHovered: {
+      borderWidth: 2,
       borderColor:
-        colors.border,
-      borderRadius: 9,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    selectCancelText: {
-      color: colors.text,
-      fontWeight: "600",
-    },
-
-    clearFilterButton: {
-      minHeight: 42,
-      borderWidth: 1,
-      borderColor:
-        colors.border,
-      backgroundColor:
-        colors.card,
-      borderRadius: 9,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    clearFilterText: {
-      color: colors.text,
-      fontWeight: "600",
-    },
-
-    dragDisabledText: {
-      color:
-        colors.secondaryText,
-      fontSize: 11,
-      marginTop: 8,
-    },
-
-    loading: {
-      marginTop: 80,
-    },
-
-    empty: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingHorizontal: 30,
-    },
-
-    emptyTitle: {
-      color: colors.text,
-      fontSize: 18,
-      fontWeight: "600",
-      textAlign: "center",
-    },
-
-    emptyText: {
-      color:
-        colors.secondaryText,
-      marginTop: 6,
-      textAlign: "center",
-    },
-
-    board: {
-      padding: 20,
-      gap: 16,
-    },
-
-    column: {
-      width: 290,
-      backgroundColor:
-        colors.surface,
-      borderWidth: 1,
-      borderColor:
-        colors.border,
-      borderRadius: 12,
-      padding: 14,
+        colors.primary,
     },
 
     columnHeader: {
-      marginBottom: 16,
+      marginBottom: 10,
     },
 
     columnTitleRow: {
       flexDirection: "row",
-      justifyContent:
-        "space-between",
       alignItems: "center",
     },
 
     columnTitle: {
+      flex: 1,
       color: colors.text,
       fontSize: 18,
       fontWeight: "700",
-      flex: 1,
     },
 
-    taskCount: {
-      color:
-        colors.secondaryText,
-      fontSize: 12,
-      marginLeft: 8,
-    },
-
-    columnActions: {
-      flexDirection: "row",
-      gap: 20,
-      marginTop: 10,
-    },
-
-    edit: {
-      color: colors.text,
-      fontSize: 13,
-      fontWeight: "600",
-    },
-
-    delete: {
-      color: colors.danger,
-      fontSize: 13,
-      fontWeight: "600",
-    },
-
-    taskArea: {
-      minHeight: 100,
-    },
-
-    noTask: {
-      color:
-        colors.secondaryText,
-      fontSize: 13,
-      marginBottom: 10,
-    },
-
-    taskCard: {
+    countBadge: {
+      minWidth: 28,
+      height: 28,
+      borderRadius: 14,
       backgroundColor:
         colors.card,
       borderWidth: 1,
       borderColor:
         colors.border,
-      borderRadius: 10,
-      padding: 12,
-      marginBottom: 10,
+      alignItems: "center",
+      justifyContent: "center",
     },
 
-    taskTitle: {
-      color: colors.text,
-      fontSize: 15,
-      fontWeight: "600",
-    },
-
-    taskPriority: {
+    countText: {
       color:
         colors.secondaryText,
-      fontSize: 12,
+      fontSize: 11,
+      fontWeight: "700",
+    },
+
+    columnActions: {
+      flexDirection: "row",
+      gap: 18,
       marginTop: 8,
     },
 
-    taskDate: {
+    columnEdit: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "700",
+    },
+
+    columnDelete: {
+      color: colors.danger,
+      fontSize: 11,
+      fontWeight: "700",
+    },
+
+    taskScroll: {
+      flex: 1,
+      minHeight: 0,
+    },
+
+    taskCard: {
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      backgroundColor:
+        colors.card,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 9,
+    },
+
+    draggingSourceCard: {
+      opacity: 0.22,
+    },
+
+    taskTopRow: {
+      flexDirection: "row",
+      alignItems:
+        "flex-start",
+    },
+
+    taskTitle: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+
+    offlineBadge: {
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+
+    offlineBadgeText: {
       color:
         colors.secondaryText,
-      fontSize: 12,
-      marginTop: 4,
+      fontSize: 8,
+    },
+
+    taskMetaRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 5,
+      marginTop: 10,
+    },
+
+    metaChip: {
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      backgroundColor:
+        colors.surface,
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+
+    metaChipText: {
+      color:
+        colors.secondaryText,
+      fontSize: 10,
+      fontWeight: "600",
     },
 
     taskAssignee: {
       color:
         colors.secondaryText,
-      fontSize: 12,
-      marginTop: 4,
+      fontSize: 11,
+      marginTop: 8,
     },
 
     dragHint: {
       color:
         colors.secondaryText,
-      fontSize: 10,
+      fontSize: 9,
       marginTop: 10,
     },
 
+    noTask: {
+      height: 90,
+      borderWidth: 1,
+      borderStyle: "dashed",
+      borderColor:
+        colors.border,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+
+    noTaskText: {
+      color:
+        colors.secondaryText,
+      fontSize: 12,
+    },
+
     addTaskButton: {
-      minHeight: 42,
+      height: 43,
+      flexShrink: 0,
       borderWidth: 1,
       borderColor:
         colors.border,
       backgroundColor:
         colors.card,
-      borderRadius: 9,
+      borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      marginTop: 10,
+      marginTop: 8,
     },
 
     addTaskText: {
       color: colors.text,
+      fontWeight: "700",
+      fontSize: 13,
+    },
+
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    emptyTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+
+    dragGhost: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: 250,
+      minHeight: 100,
+      zIndex: 10000,
+      elevation: 10000,
+      borderWidth: 2,
+      borderColor:
+        colors.primary,
+      backgroundColor:
+        colors.card,
+      borderRadius: 14,
+      padding: 14,
+      justifyContent: "center",
+    },
+
+    dragGhostTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+
+    dragGhostMeta: {
+      color:
+        colors.secondaryText,
+      fontSize: 11,
+      marginTop: 8,
+    },
+
+    dragBanner: {
+      position: "absolute",
+      top: 8,
+      left: 30,
+      right: 30,
+      minHeight: 38,
+      zIndex: 10001,
+      elevation: 10001,
+      backgroundColor:
+        colors.card,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 12,
+    },
+
+    dragBannerText: {
+      color: colors.text,
+      fontSize: 10,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+
+    trashWrapper: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 14,
+      alignItems: "center",
+      zIndex: 10002,
+      elevation: 10002,
+    },
+
+    trashZone: {
+      width: 180,
+      height: 58,
+      borderWidth: 2,
+      borderColor:
+        colors.danger,
+      backgroundColor:
+        colors.card,
+      borderRadius: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+
+    trashZoneHovered: {
+      transform: [
+        {
+          scale: 1.08,
+        },
+      ],
+    },
+
+    trashIcon: {
+      fontSize: 20,
+    },
+
+    trashText: {
+      color: colors.danger,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+
+    filterOverlay: {
+      flex: 1,
+      backgroundColor:
+        colors.overlay,
+      justifyContent: "flex-end",
+    },
+
+    filterSheet: {
+      backgroundColor:
+        colors.card,
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      padding: 20,
+      paddingBottom: 28,
+    },
+
+    sheetTitle: {
+      color: colors.text,
+      fontSize: 22,
+      fontWeight: "700",
+      marginBottom: 20,
+    },
+
+    filterSectionTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "700",
+      marginBottom: 9,
+    },
+
+    chips: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 20,
+    },
+
+    choiceChip: {
+      height: 36,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      borderRadius: 18,
+      backgroundColor:
+        colors.surface,
+      paddingHorizontal: 13,
+      justifyContent: "center",
+    },
+
+    choiceChipSelected: {
+      backgroundColor:
+        colors.primary,
+      borderColor:
+        colors.primary,
+    },
+
+    choiceChipText: {
+      color: colors.text,
+      fontSize: 12,
       fontWeight: "600",
+    },
+
+    choiceChipTextSelected: {
+      color:
+        colors.onPrimary,
+    },
+
+    filterFooter: {
+      flexDirection: "row",
+      gap: 10,
+    },
+
+    resetButton: {
+      flex: 1,
+      height: 46,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    resetText: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+
+    applyButton: {
+      flex: 1,
+      height: 46,
+      backgroundColor:
+        colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    applyText: {
+      color:
+        colors.onPrimary,
+      fontWeight: "700",
     },
 
     modalOverlay: {
@@ -1977,7 +2904,7 @@ function createStyles(colors) {
       color: colors.text,
       fontSize: 20,
       fontWeight: "700",
-      marginBottom: 20,
+      marginBottom: 18,
     },
 
     input: {
@@ -1992,24 +2919,15 @@ function createStyles(colors) {
       paddingHorizontal: 14,
     },
 
-    counter: {
-      color:
-        colors.secondaryText,
-      textAlign: "right",
-      fontSize: 12,
-      marginTop: 5,
-    },
-
     modalActions: {
       flexDirection: "row",
-      justifyContent:
-        "flex-end",
-      gap: 12,
-      marginTop: 20,
+      justifyContent: "flex-end",
+      gap: 10,
+      marginTop: 18,
     },
 
     cancelButton: {
-      height: 46,
+      height: 44,
       paddingHorizontal: 18,
       justifyContent: "center",
     },
@@ -2020,19 +2938,18 @@ function createStyles(colors) {
 
     saveButton: {
       minWidth: 90,
-      height: 46,
+      height: 44,
       backgroundColor:
         colors.primary,
       borderRadius: 9,
       alignItems: "center",
       justifyContent: "center",
-      paddingHorizontal: 18,
     },
 
     saveText: {
       color:
         colors.onPrimary,
-      fontWeight: "600",
+      fontWeight: "700",
     },
   });
 }

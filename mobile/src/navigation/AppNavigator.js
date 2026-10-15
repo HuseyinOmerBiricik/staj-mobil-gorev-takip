@@ -6,6 +6,8 @@ import {
   createBottomTabNavigator,
 } from "@react-navigation/bottom-tabs";
 
+import Ionicons from "@expo/vector-icons/Ionicons";
+
 import BoardNavigator from "./BoardNavigator";
 
 import ReminderScreen from "../screens/ReminderScreen";
@@ -14,6 +16,10 @@ import SettingsScreen from "../screens/SettingsScreen";
 
 import useReminderStore from "../store/reminderStore";
 import useSyncStore from "../store/syncStore";
+
+import {
+  useAppTheme,
+} from "../theme/theme";
 
 const Tab =
   createBottomTabNavigator();
@@ -36,6 +42,10 @@ export default function AppNavigator() {
       (state) =>
         state.pendingCount
     );
+
+  const {
+    colors,
+  } = useAppTheme();
 
   useEffect(() => {
     const load =
@@ -62,10 +72,104 @@ export default function AppNavigator() {
 
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown:
-          false,
-      }}
+      screenOptions={({
+        route,
+      }) => ({
+        headerShown: false,
+
+        tabBarActiveTintColor:
+          colors.text,
+
+        tabBarInactiveTintColor:
+          colors.secondaryText,
+
+        tabBarStyle: {
+          backgroundColor:
+            colors.card,
+
+          borderTopColor:
+            colors.border,
+
+          borderTopWidth: 1,
+
+          height: 68,
+
+          paddingTop: 7,
+
+          paddingBottom: 8,
+        },
+
+        tabBarLabelStyle: {
+          fontSize: 11,
+
+          fontWeight: "600",
+        },
+
+        tabBarIcon: ({
+          color,
+          size,
+          focused,
+        }) => {
+          let iconName =
+            "ellipse-outline";
+
+          if (
+            route.name ===
+            "BoardsTab"
+          ) {
+            iconName =
+              focused
+                ? "grid"
+                : "grid-outline";
+          }
+
+          if (
+            route.name ===
+            "ReminderTab"
+          ) {
+            iconName =
+              focused
+                ? "notifications"
+                : "notifications-outline";
+          }
+
+          if (
+            route.name ===
+            "ProfileTab"
+          ) {
+            iconName =
+              focused
+                ? "person"
+                : "person-outline";
+          }
+
+          if (
+            route.name ===
+            "SettingsTab"
+          ) {
+            iconName =
+              focused
+                ? "settings"
+                : "settings-outline";
+          }
+
+          return (
+            <Ionicons
+              name={
+                iconName
+              }
+              size={
+                focused
+                  ? 24
+                  : 22
+              }
+              color={
+                color
+              }
+            />
+          );
+        },
+      })}
     >
       <Tab.Screen
         name="BoardsTab"
@@ -98,6 +202,16 @@ export default function AppNavigator() {
             0
               ? urgentCount
               : undefined,
+
+          tabBarBadgeStyle: {
+            fontSize: 10,
+
+            minWidth: 18,
+
+            height: 18,
+
+            lineHeight: 18,
+          },
         }}
       />
 
@@ -132,6 +246,16 @@ export default function AppNavigator() {
             0
               ? pendingCount
               : undefined,
+
+          tabBarBadgeStyle: {
+            fontSize: 10,
+
+            minWidth: 18,
+
+            height: 18,
+
+            lineHeight: 18,
+          },
         }}
       />
     </Tab.Navigator>

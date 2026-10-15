@@ -1,4 +1,8 @@
 import {
+  useState,
+} from "react";
+
+import {
   View,
   Text,
   TouchableOpacity,
@@ -7,6 +11,8 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+
+import Constants from "expo-constants";
 
 import useThemeStore from "../store/themeStore";
 import useSyncStore from "../store/syncStore";
@@ -19,7 +25,7 @@ function formatSyncDate(
   value
 ) {
   if (!value) {
-    return "Henüz senkronizasyon yapılmadı.";
+    return "Henüz senkronizasyon yapılmadı";
   }
 
   return new Date(
@@ -30,6 +36,24 @@ function formatSyncDate(
 }
 
 export default function SettingsScreen() {
+  const [
+    appearanceOpen,
+    setAppearanceOpen,
+  ] =
+    useState(false);
+
+  const [
+    syncOpen,
+    setSyncOpen,
+  ] =
+    useState(false);
+
+  const [
+    aboutOpen,
+    setAboutOpen,
+  ] =
+    useState(false);
+
   const theme =
     useThemeStore(
       (state) =>
@@ -88,21 +112,27 @@ export default function SettingsScreen() {
       colors
     );
 
+  const version =
+    Constants.expoConfig
+      ?.version ||
+    "1.0.0";
+
   const ThemeOption = ({
     value,
     title,
     description,
   }) => {
     const selected =
-      theme === value;
+      theme ===
+      value;
 
     return (
       <TouchableOpacity
         style={[
-          styles.option,
+          styles.themeOption,
 
           selected &&
-            styles.optionSelected,
+            styles.themeOptionSelected,
         ]}
         onPress={() =>
           setTheme(
@@ -111,9 +141,9 @@ export default function SettingsScreen() {
         }
       >
         <View
-          style={
-            styles.optionText
-          }
+          style={{
+            flex: 1,
+          }}
         >
           <Text
             style={
@@ -152,6 +182,56 @@ export default function SettingsScreen() {
     );
   };
 
+  const SectionHeader = ({
+    title,
+    subtitle,
+    open,
+    onPress,
+  }) => (
+    <TouchableOpacity
+      style={
+        styles.sectionHeader
+      }
+      onPress={
+        onPress
+      }
+    >
+      <View
+        style={{
+          flex: 1,
+        }}
+      >
+        <Text
+          style={
+            styles.sectionHeaderTitle
+          }
+        >
+          {title}
+        </Text>
+
+        {subtitle ? (
+          <Text
+            style={
+              styles.sectionHeaderSubtitle
+            }
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+
+      <Text
+        style={
+          styles.chevron
+        }
+      >
+        {open
+          ? "⌃"
+          : "⌄"}
+      </Text>
+    </TouchableOpacity>
+  );
+
   const handleSync =
     async () => {
       if (
@@ -170,21 +250,14 @@ export default function SettingsScreen() {
       const state =
         useSyncStore.getState();
 
-      if (
+      Alert.alert(
+        "Senkronizasyon",
         state.pendingCount ===
         0
-      ) {
-        Alert.alert(
-          "Senkronizasyon",
-          "Bekleyen değişiklikler başarıyla senkronize edildi."
-        );
-      } else {
-        Alert.alert(
-          "Senkronizasyon",
-          state.lastError ||
-            "Bazı değişiklikler henüz senkronize edilemedi."
-        );
-      }
+          ? "Tüm değişiklikler senkronize edildi."
+          : state.lastError ||
+              "Bazı değişiklikler bekliyor."
+      );
     };
 
   return (
@@ -195,6 +268,9 @@ export default function SettingsScreen() {
       contentContainerStyle={
         styles.content
       }
+      showsVerticalScrollIndicator={
+        false
+      }
     >
       <Text
         style={
@@ -204,207 +280,355 @@ export default function SettingsScreen() {
         Ayarlar
       </Text>
 
-      <Text
-        style={
-          styles.sectionTitle
-        }
-      >
-        Görünüm
-      </Text>
-
-      <ThemeOption
-        value="light"
-        title="Açık Tema"
-        description="Uygulamayı her zaman açık temada kullan."
-      />
-
-      <ThemeOption
-        value="dark"
-        title="Karanlık Tema"
-        description="Uygulamayı her zaman karanlık temada kullan."
-      />
-
-      <ThemeOption
-        value="system"
-        title="Sistem Ayarını Kullan"
-        description="Telefonun açık veya karanlık tema ayarını takip et."
-      />
-
-      <Text
-        style={
-          styles.info
-        }
-      >
-        Tema tercihiniz cihazda saklanır ve uygulama tekrar açıldığında korunur.
-      </Text>
-
       <View
         style={
-          styles.divider
-        }
-      />
-
-      <Text
-        style={
-          styles.sectionTitle
+          styles.sectionCard
         }
       >
-        Offline ve Senkronizasyon
-      </Text>
-
-      <View
-        style={
-          styles.syncCard
-        }
-      >
-        <View
-          style={
-            styles.statusRow
+        <SectionHeader
+          title="Görünüm"
+          subtitle={
+            theme ===
+            "light"
+              ? "Açık Tema"
+              : theme ===
+                "dark"
+              ? "Karanlık Tema"
+              : "Sistem Ayarı"
           }
-        >
+          open={
+            appearanceOpen
+          }
+          onPress={() =>
+            setAppearanceOpen(
+              !appearanceOpen
+            )
+          }
+        />
+
+        {appearanceOpen ? (
           <View
-            style={[
-              styles.statusDot,
-
-              isConnected
-                ? styles.onlineDot
-                : styles.offlineDot,
-            ]}
-          />
-
-          <View
-            style={{
-              flex: 1,
-            }}
-          >
-            <Text
-              style={
-                styles.statusTitle
-              }
-            >
-              {isConnected
-                ? "Çevrimiçi"
-                : "Çevrimdışı"}
-            </Text>
-
-            <Text
-              style={
-                styles.statusDescription
-              }
-            >
-              {isConnected
-                ? "Sunucuya gönderilmeyi bekleyen değişiklikler otomatik olarak senkronize edilir."
-                : "Değişiklikler cihazda saklanacak ve bağlantı geri geldiğinde gönderilecek."}
-            </Text>
-          </View>
-        </View>
-
-        <View
-          style={
-            styles.syncInfoRow
-          }
-        >
-          <Text
             style={
-              styles.syncInfoLabel
+              styles.sectionContent
             }
           >
-            Bekleyen değişiklik
-          </Text>
-
-          <Text
-            style={
-              styles.syncInfoValue
-            }
-          >
-            {pendingCount}
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.syncInfoRow
-          }
-        >
-          <Text
-            style={
-              styles.syncInfoLabel
-            }
-          >
-            Son senkronizasyon
-          </Text>
-
-          <Text
-            style={
-              styles.syncDate
-            }
-          >
-            {formatSyncDate(
-              lastSyncAt
-            )}
-          </Text>
-        </View>
-
-        {lastError ? (
-          <Text
-            style={
-              styles.errorText
-            }
-          >
-            {lastError}
-          </Text>
-        ) : null}
-
-        <TouchableOpacity
-          style={[
-            styles.syncButton,
-
-            (
-              !isConnected ||
-              isSyncing ||
-              pendingCount ===
-                0
-            ) &&
-              styles.disabledButton,
-          ]}
-          disabled={
-            !isConnected ||
-            isSyncing ||
-            pendingCount ===
-              0
-          }
-          onPress={
-            handleSync
-          }
-        >
-          {isSyncing ? (
-            <ActivityIndicator
-              color={
-                colors.onPrimary
-              }
+            <ThemeOption
+              value="light"
+              title="Açık Tema"
+              description="Uygulamayı her zaman açık temada kullan."
             />
-          ) : (
-            <Text
-              style={
-                styles.syncButtonText
-              }
-            >
-              {pendingCount >
-              0
-                ? "Şimdi Senkronize Et"
-                : "Senkronizasyon Tamam"}
-            </Text>
-          )}
-        </TouchableOpacity>
+
+            <ThemeOption
+              value="dark"
+              title="Karanlık Tema"
+              description="Uygulamayı her zaman karanlık temada kullan."
+            />
+
+            <ThemeOption
+              value="system"
+              title="Sistem Ayarını Kullan"
+              description="Telefonun tema ayarını otomatik takip et."
+            />
+          </View>
+        ) : null}
       </View>
 
-      <Text
+      <View
         style={
-          styles.offlineInfo
+          styles.sectionCard
         }
       >
-        Daha önce yüklenmiş panolar, listeler, görevler ve yorumlar internet olmadan görüntülenebilir. Çevrimdışı yapılan temel değişiklikler cihazda sıraya alınır.
-      </Text>
+        <SectionHeader
+          title="Offline ve Senkronizasyon"
+          subtitle={
+            isConnected
+              ? pendingCount >
+                0
+                ? `${pendingCount} değişiklik bekliyor`
+                : "Tüm veriler güncel"
+              : "Çevrimdışı mod"
+          }
+          open={
+            syncOpen
+          }
+          onPress={() =>
+            setSyncOpen(
+              !syncOpen
+            )
+          }
+        />
+
+        {syncOpen ? (
+          <View
+            style={
+              styles.sectionContent
+            }
+          >
+            <View
+              style={
+                styles.connectionCard
+              }
+            >
+              <View
+                style={
+                  styles.connectionHeader
+                }
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+
+                    isConnected
+                      ? styles.onlineDot
+                      : styles.offlineDot,
+                  ]}
+                />
+
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.connectionTitle
+                    }
+                  >
+                    {isConnected
+                      ? "Çevrimiçi"
+                      : "Çevrimdışı"}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.connectionDescription
+                    }
+                  >
+                    {isConnected
+                      ? "Bağlantı kullanılabilir."
+                      : "Veriler cihaz önbelleğinden gösteriliyor."}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={
+                  styles.dataRow
+                }
+              >
+                <Text
+                  style={
+                    styles.dataLabel
+                  }
+                >
+                  Bekleyen değişiklik
+                </Text>
+
+                <Text
+                  style={
+                    styles.dataValue
+                  }
+                >
+                  {
+                    pendingCount
+                  }
+                </Text>
+              </View>
+
+              <View
+                style={
+                  styles.dataRow
+                }
+              >
+                <Text
+                  style={
+                    styles.dataLabel
+                  }
+                >
+                  Son senkronizasyon
+                </Text>
+
+                <Text
+                  style={
+                    styles.dataDate
+                  }
+                >
+                  {formatSyncDate(
+                    lastSyncAt
+                  )}
+                </Text>
+              </View>
+
+              {lastError ? (
+                <Text
+                  style={
+                    styles.errorText
+                  }
+                >
+                  {lastError}
+                </Text>
+              ) : null}
+
+              <TouchableOpacity
+                style={[
+                  styles.syncButton,
+
+                  (
+                    !isConnected ||
+                    pendingCount ===
+                      0 ||
+                    isSyncing
+                  ) &&
+                    styles.disabled,
+                ]}
+                disabled={
+                  !isConnected ||
+                  pendingCount ===
+                    0 ||
+                  isSyncing
+                }
+                onPress={
+                  handleSync
+                }
+              >
+                {isSyncing ? (
+                  <ActivityIndicator
+                    color={
+                      colors.onPrimary
+                    }
+                  />
+                ) : (
+                  <Text
+                    style={
+                      styles.syncButtonText
+                    }
+                  >
+                    {pendingCount >
+                    0
+                      ? "Şimdi Senkronize Et"
+                      : "Senkronizasyon Tamam"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      <View
+        style={
+          styles.sectionCard
+        }
+      >
+        <SectionHeader
+          title="Uygulama ve Güvenlik"
+          subtitle={`Sürüm ${version}`}
+          open={
+            aboutOpen
+          }
+          onPress={() =>
+            setAboutOpen(
+              !aboutOpen
+            )
+          }
+        />
+
+        {aboutOpen ? (
+          <View
+            style={
+              styles.sectionContent
+            }
+          >
+            <View
+              style={
+                styles.aboutRow
+              }
+            >
+              <Text
+                style={
+                  styles.aboutLabel
+                }
+              >
+                Uygulama
+              </Text>
+
+              <Text
+                style={
+                  styles.aboutValue
+                }
+              >
+                Görev ve Proje Takip
+              </Text>
+            </View>
+
+            <View
+              style={
+                styles.divider
+              }
+            />
+
+            <View
+              style={
+                styles.aboutRow
+              }
+            >
+              <Text
+                style={
+                  styles.aboutLabel
+                }
+              >
+                Sürüm
+              </Text>
+
+              <Text
+                style={
+                  styles.aboutValue
+                }
+              >
+                {version}
+              </Text>
+            </View>
+
+            <View
+              style={
+                styles.divider
+              }
+            />
+
+            <Text
+              style={
+                styles.securityTitle
+              }
+            >
+              Veri Güvenliği
+            </Text>
+
+            <Text
+              style={
+                styles.securityText
+              }
+            >
+              Oturum anahtarı cihazın SecureStore alanında tutulur. Offline veriler yalnızca uygulamanın yerel depolama alanında saklanır.
+            </Text>
+
+            <Text
+              style={
+                styles.securityTitle
+              }
+            >
+              Offline Kullanım
+            </Text>
+
+            <Text
+              style={
+                styles.securityText
+              }
+            >
+              Daha önce yüklenen panolar, görevler ve yorumlar internet bağlantısı olmadan görüntülenebilir. Bekleyen değişiklikler bağlantı geri geldiğinde senkronize edilir.
+            </Text>
+          </View>
+        ) : null}
+      </View>
     </ScrollView>
   );
 }
@@ -415,121 +639,114 @@ function createStyles(
   return StyleSheet.create({
     container: {
       flex: 1,
-
       backgroundColor:
         colors.background,
     },
 
     content: {
       paddingHorizontal:
-        24,
-
-      paddingTop: 60,
-
+        20,
+      paddingTop: 56,
       paddingBottom: 50,
     },
 
     title: {
+      color: colors.text,
       fontSize: 30,
-
-      fontWeight:
-        "700",
-
-      color:
-        colors.text,
-
-      marginBottom:
-        32,
+      fontWeight: "700",
+      marginBottom: 26,
     },
 
-    sectionTitle: {
-      fontSize: 15,
-
-      fontWeight:
-        "700",
-
-      color:
-        colors.text,
-
-      marginBottom:
-        12,
-    },
-
-    option: {
-      minHeight: 78,
-
+    sectionCard: {
       borderWidth: 1,
-
       borderColor:
         colors.border,
-
-      borderRadius: 12,
-
-      padding: 16,
-
-      marginBottom: 12,
-
       backgroundColor:
         colors.card,
-
-      flexDirection:
-        "row",
-
-      alignItems:
-        "center",
+      borderRadius: 14,
+      marginBottom: 12,
+      overflow: "hidden",
     },
 
-    optionSelected: {
+    sectionHeader: {
+      minHeight: 72,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    sectionHeaderTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+
+    sectionHeaderSubtitle: {
+      color:
+        colors.secondaryText,
+      fontSize: 11,
+      marginTop: 4,
+    },
+
+    chevron: {
+      color:
+        colors.secondaryText,
+      fontSize: 20,
+      marginLeft: 12,
+    },
+
+    sectionContent: {
+      borderTopWidth: 1,
+      borderTopColor:
+        colors.border,
+      padding: 14,
+    },
+
+    themeOption: {
+      minHeight: 72,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      backgroundColor:
+        colors.surface,
+      borderRadius: 11,
+      padding: 14,
+      marginBottom: 9,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    themeOptionSelected: {
       borderColor:
         colors.primary,
-
       borderWidth: 2,
     },
 
-    optionText: {
-      flex: 1,
-
-      paddingRight: 16,
-    },
-
     optionTitle: {
-      fontSize: 16,
-
-      fontWeight:
-        "700",
-
-      color:
-        colors.text,
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "700",
     },
 
     optionDescription: {
-      fontSize: 13,
-
       color:
         colors.secondaryText,
-
-      marginTop: 5,
-
-      lineHeight: 18,
+      fontSize: 11,
+      lineHeight: 16,
+      marginTop: 4,
     },
 
     radio: {
       width: 22,
-
       height: 22,
-
       borderRadius: 11,
-
       borderWidth: 2,
-
       borderColor:
         colors.border,
-
-      alignItems:
-        "center",
-
-      justifyContent:
-        "center",
+      alignItems: "center",
+      justifyContent: "center",
+      marginLeft: 12,
     },
 
     radioSelected: {
@@ -539,71 +756,31 @@ function createStyles(
 
     radioInner: {
       width: 10,
-
       height: 10,
-
       borderRadius: 5,
-
       backgroundColor:
         colors.primary,
     },
 
-    info: {
-      color:
-        colors.secondaryText,
-
-      fontSize: 12,
-
-      lineHeight: 18,
-
-      marginTop: 10,
-    },
-
-    divider: {
-      height: 1,
-
+    connectionCard: {
       backgroundColor:
-        colors.border,
-
-      marginVertical:
-        28,
+        colors.surface,
+      borderRadius: 11,
+      padding: 14,
     },
 
-    syncCard: {
-      borderWidth: 1,
-
-      borderColor:
-        colors.border,
-
-      borderRadius: 14,
-
-      backgroundColor:
-        colors.card,
-
-      padding: 16,
-    },
-
-    statusRow: {
-      flexDirection:
-        "row",
-
-      alignItems:
-        "flex-start",
-
-      marginBottom:
-        18,
+    connectionHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 14,
     },
 
     statusDot: {
-      width: 12,
-
-      height: 12,
-
-      borderRadius: 6,
-
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginRight: 9,
       marginTop: 4,
-
-      marginRight: 10,
     },
 
     onlineDot: {
@@ -616,126 +793,117 @@ function createStyles(
         colors.danger,
     },
 
-    statusTitle: {
-      color:
-        colors.text,
-
-      fontSize: 16,
-
-      fontWeight:
-        "700",
+    connectionTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "700",
     },
 
-    statusDescription: {
+    connectionDescription: {
       color:
         colors.secondaryText,
-
-      fontSize: 12,
-
-      lineHeight: 18,
-
-      marginTop: 4,
+      fontSize: 11,
+      marginTop: 3,
     },
 
-    syncInfoRow: {
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems:
-        "center",
-
+    dataRow: {
+      minHeight: 45,
       borderTopWidth: 1,
-
       borderTopColor:
         colors.border,
-
-      paddingVertical:
-        12,
-
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
       gap: 12,
     },
 
-    syncInfoLabel: {
+    dataLabel: {
       color:
         colors.secondaryText,
-
-      fontSize: 12,
-    },
-
-    syncInfoValue: {
-      color:
-        colors.text,
-
-      fontSize: 16,
-
-      fontWeight:
-        "700",
-    },
-
-    syncDate: {
-      color:
-        colors.text,
-
       fontSize: 11,
+    },
 
-      textAlign:
-        "right",
+    dataValue: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "700",
+    },
 
+    dataDate: {
       flex: 1,
+      textAlign: "right",
+      color: colors.text,
+      fontSize: 10,
     },
 
     errorText: {
-      color:
-        colors.danger,
-
-      fontSize: 12,
-
-      lineHeight: 18,
-
+      color: colors.danger,
+      fontSize: 11,
       marginTop: 8,
     },
 
     syncButton: {
-      height: 48,
-
+      height: 44,
       backgroundColor:
         colors.primary,
-
-      borderRadius: 10,
-
-      alignItems:
-        "center",
-
-      justifyContent:
-        "center",
-
+      borderRadius: 9,
+      alignItems: "center",
+      justifyContent: "center",
       marginTop: 12,
     },
 
     syncButtonText: {
       color:
         colors.onPrimary,
-
-      fontWeight:
-        "700",
+      fontWeight: "700",
     },
 
-    disabledButton: {
-      opacity: 0.45,
+    disabled: {
+      opacity: 0.4,
     },
 
-    offlineInfo: {
+    aboutRow: {
+      minHeight: 38,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+    },
+
+    aboutLabel: {
       color:
         colors.secondaryText,
+      fontSize: 11,
+    },
 
+    aboutValue: {
+      color: colors.text,
       fontSize: 12,
+      fontWeight: "600",
+    },
 
-      lineHeight: 18,
+    divider: {
+      height: 1,
+      backgroundColor:
+        colors.border,
+      marginVertical: 9,
+    },
 
-      marginTop: 12,
+    securityTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "700",
+      marginTop: 10,
+    },
+
+    securityText: {
+      color:
+        colors.secondaryText,
+      fontSize: 11,
+      lineHeight: 17,
+      marginTop: 4,
+      marginBottom: 8,
     },
   });
 }

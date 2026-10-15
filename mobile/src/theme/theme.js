@@ -1,4 +1,6 @@
-import { useColorScheme } from "react-native";
+import {
+  useColorScheme,
+} from "react-native";
 
 import useThemeStore from "../store/themeStore";
 
@@ -41,22 +43,33 @@ export const darkColors = {
 };
 
 export function useAppTheme() {
-  const preference = useThemeStore(
-    (state) => state.theme
-  );
+  const preference =
+    useThemeStore(
+      (state) =>
+        state.theme
+    );
 
-  const systemTheme = useColorScheme();
+  const systemTheme =
+    useColorScheme();
 
   const isDark =
-    preference === "dark" ||
-    (preference === "system" &&
-      systemTheme === "dark");
+    preference ===
+      "dark" ||
+    (
+      preference ===
+        "system" &&
+      systemTheme ===
+        "dark"
+    );
 
   return {
     isDark,
+
     preference,
-    colors: isDark
-      ? darkColors
-      : lightColors,
+
+    colors:
+      isDark
+        ? darkColors
+        : lightColors,
   };
 }
